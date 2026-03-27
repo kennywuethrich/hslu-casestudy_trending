@@ -49,3 +49,6 @@ kpi_vergleich.png
 kpi_ergebnisse.csv
 simulationsergebnisse_*.csv
 alle_szenarien_kpi.csv
+
+# Generated outputs
+results/

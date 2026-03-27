@@ -3,6 +3,7 @@ Simulator-Modul: Koordiniert die gesamte H2-Microgrid Simulation.
 """
 
 import pandas as pd
+import os
 from typing import List, Dict, Tuple
 from config import SystemConfig
 from profiles import ProfileGenerator
@@ -34,8 +35,16 @@ class Simulator:
         self.profile_generator = ProfileGenerator()
         self.analyzer = ResultAnalyzer(self.config)
         self.results = {}  # Speichert Ergebnisse aller Strategien
+        self.output_dir = "results"
+        os.makedirs(self.output_dir, exist_ok=True)
         
         print(f"\n✓ Simulator initialisiert für: {scenario.name}")
+
+    def _resolve_output_path(self, filepath: str) -> str:
+        """Löst relative Dateinamen standardmäßig in den results-Ordner auf."""
+        if os.path.isabs(filepath) or os.path.dirname(filepath):
+            return filepath
+        return os.path.join(self.output_dir, filepath)
     
     def generate_profiles(self, hours: int = 8760) -> pd.DataFrame:
         """
@@ -181,9 +190,14 @@ class Simulator:
         Args:
             csv_filepath: Zieldatei für CSV
         """
+        base_path = self._resolve_output_path(csv_filepath)
+        stem, ext = os.path.splitext(base_path)
+        if not ext:
+            ext = ".csv"
+
         for strategy_key, result in self.results.items():
             result_df = result['result_df']
-            filename = f"{csv_filepath.replace('.csv', '')}_{strategy_key}.csv"
+            filename = f"{stem}_{strategy_key}{ext}"
             result_df.to_csv(filename, index=False)
             print(f"  ✓ Exportiert: {filename}")
         

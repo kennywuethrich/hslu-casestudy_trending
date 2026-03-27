@@ -250,8 +250,8 @@ class SystemConfig:
 
 ### "Modul nicht gefunden"
 ```bash
-# Stelle sicher, dass du im Casestudy-Verzeichnis bin
-cd c:\Users\Kenny\Documents\HSLU\Semester_4\TRENDING\02_Code\Casestudy
+# Stelle sicher, dass du im GithubRepo-Verzeichnis bin
+
 ```
 
 ### Plots werden nicht angezeigt

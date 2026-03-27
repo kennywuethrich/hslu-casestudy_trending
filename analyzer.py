@@ -4,6 +4,7 @@ Analyzer-Modul: KPI-Berechnung, Auswertung und Visualisierung.
 
 import pandas as pd
 import numpy as np
+import os
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 from typing import Dict, List
@@ -18,6 +19,16 @@ class ResultAnalyzer:
     
     def __init__(self, config: SystemConfig):
         self.config = config
+        self.output_dir = "results"
+        os.makedirs(self.output_dir, exist_ok=True)
+
+    def _resolve_output_path(self, filepath: str) -> str:
+        """Löst relative Dateinamen standardmäßig in den results-Ordner auf."""
+        if not filepath:
+            return filepath
+        if os.path.isabs(filepath) or os.path.dirname(filepath):
+            return filepath
+        return os.path.join(self.output_dir, filepath)
     
     def calculate_kpis(self, result_df: pd.DataFrame, label: str = "") -> Dict:
         """
@@ -74,7 +85,7 @@ class ResultAnalyzer:
             'H2-Erzeugung [kWh]': round(result_df['ely_power_kw'].sum() * self.config.ely_eff_el, 0),
         }
     
-    def plot_week(self, result_df: pd.DataFrame, title: str = "Wochenprofil",
+    def plot_week(self, result_df: pd.DataFrame, title: str = "Wochenprofil", show: bool = False,
                   start_day: int = 172, save_path: str = None):
         """
         Erstellt detailliertes Wochenprofil.
@@ -137,12 +148,14 @@ class ResultAnalyzer:
         plt.tight_layout()
         
         if save_path:
-            plt.savefig(save_path, dpi=150)
-            print(f"  ✓ Gespeichert: {save_path}")
+            resolved_path = self._resolve_output_path(save_path)
+            plt.savefig(resolved_path, dpi=150)
+            print(f"  ✓ Gespeichert: {resolved_path}")
         
-        plt.show()
+        # plt.show()
+        plt.close(fig)
     
-    def plot_kpi_comparison(self, kpi_list: List[Dict], 
+    def plot_kpi_comparison(self, kpi_list: List[Dict], show: bool = False, 
                            save_path: str = None):
         """
         Erstellt KPI-Vergleichsdiagramm.
@@ -177,10 +190,12 @@ class ResultAnalyzer:
         plt.tight_layout()
         
         if save_path:
-            plt.savefig(save_path, dpi=150)
-            print(f"  ✓ Gespeichert: {save_path}")
+            resolved_path = self._resolve_output_path(save_path)
+            plt.savefig(resolved_path, dpi=150)
+            print(f"  ✓ Gespeichert: {resolved_path}")
         
-        plt.show()
+        # plt.show()
+        plt.close(fig)
     
     def print_kpi_table(self, kpi_list: List[Dict]):
         """
@@ -205,6 +220,7 @@ class ResultAnalyzer:
             kpi_list: Liste von KPI-Dicts
             filepath: Zieldatei
         """
+        resolved_path = self._resolve_output_path(filepath)
         kpi_df = pd.DataFrame(kpi_list)
-        kpi_df.to_csv(filepath, index=False)
-        print(f"  ✓ KPI-Ergebnisse gespeichert: {filepath}")
+        kpi_df.to_csv(resolved_path, index=False)
+        print(f"  ✓ KPI-Ergebnisse gespeichert: {resolved_path}")
