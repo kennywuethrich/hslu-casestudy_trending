@@ -50,5 +50,6 @@ kpi_ergebnisse.csv
 simulationsergebnisse_*.csv
 alle_szenarien_kpi.csv
 
-# Generated outputs
-results/
+# Generated outputs (keep folder, ignore contents)
+results/**
+!results/.gitkeep
