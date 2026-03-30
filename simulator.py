@@ -164,23 +164,16 @@ class Simulator:
         
         for strategy_key, result in self.results.items():
             result_df = result['result_df']
-            
-            # Dynamischste Woche (größte H2-SOC-Änderung)
-            title = f"{self.scenario.name} – {strategy_key} – Dynamischste Woche"
-            save_path = f"woche_dynamisch_{strategy_key.lower()}.png"
-            self.analyzer.plot_week(result_df, title=title,
-                                   start_day=None, save_path=save_path,
-                                   adaptive_soc_axis=True)
 
             # Jahres-/Saisonverlauf H2-SOC
             title = f"{self.scenario.name} – {strategy_key} – H2-SOC Jahresverlauf"
             save_path = f"h2_soc_jahr_{strategy_key.lower()}.png"
             self.analyzer.plot_h2_soc_year(result_df, title=title, save_path=save_path)
-        
-        # KPI-Vergleich
-        kpis_list = self.get_kpis_summary()
-        self.analyzer.plot_kpi_comparison(kpis_list, 
-                                         save_path="kpi_vergleich.png")
+
+            # Übersichtliche Jahresbilanz der wichtigsten Energieströme
+            title = f"{self.scenario.name} – {strategy_key} – Jahresübersicht Energieströme"
+            save_path = f"jahresuebersicht_{strategy_key.lower()}.png"
+            self.analyzer.plot_year_energy_overview(result_df, title=title, save_path=save_path)
     
     def export_results(self, csv_filepath: str = "simulationsergebnisse.csv"):
         """

@@ -18,12 +18,20 @@ class SystemConfig:
     - Brennstoffzelle: 34 kW
     - Wärmepumpe: 95 kW (thermisch)
     """
+
+    # Datengrundlage (zentraler Schalter)
+    # - time_resolution steuert, welche CSV-Datei verwendet wird.
+    #   1h -> stündliche Auswertung, 15min -> native viertelstündliche Auswertung.
+
+    time_resolution: Literal['1h', '15min'] = '1h'
+    data_dir: str = 'data'
+    data_csv_1h: str = 'data_anna-heer_1h.csv'
+    data_csv_15min: str = 'data_anna-heer_15min.csv'
     
     # Anlagenleistungen [kW]
     ely_kw_max: float = 33.0       # Elektrolyseur max. Leistung
     fc_kw_max: float = 34.0        # Brennstoffzelle max. Leistung
     hp_kw_th_max: float = 95.0     # Wärmepumpe max. thermische Leistung
-    ev_max_charge_kw: float = 22.0 # Maximale EV-Ladeleistung (Fleet)
 
     # H2-Speicher (editierbare physikalische Eingaben)
     # Druck als absoluter Druck [bar(abs)] angeben.
@@ -42,12 +50,8 @@ class SystemConfig:
     # Legacy/optional: Direkte Überschreibung der berechneten H2-Kapazität
     h2_capacity_override_kwh: Optional[float] = None
 
-    h2_initial_soc: float = 0.05    # Anfangs-SOC (5%) (State of Charge)
+    h2_initial_soc: float = 0.05   # Anfangs-SOC (5%) (State of Charge)
     h2_min_soc: float = 0.05       # Minimaler SOC (5% Reserve)
-
-    # EV-Fleet Speicher
-    ev_capacity_kwh: float = 40.0
-    ev_initial_soc: float = 0.5
 
     # Thermischer Speicher zur WP-Lastverschiebung
     thermal_storage_capacity_kwh: float = 600.0
@@ -66,21 +70,12 @@ class SystemConfig:
     co2_grid_kg_kwh: float = 0.128 # Schweizer Netzmix CO2-Intensität [kg/kWh]
 
     # Preisbasierte Strategie: Schwellenwerte
-    price_threshold_ely: float = 0.20  # ELY läuft wenn Preis < Schwellenwert
     price_threshold_fc: float = 0.30   # BZ liefert wenn Preis > Schwellenwert
 
     # FC-Dispatch (beide Strategien)
-    fc_reserve_soc_target: float = 0.20  # Zielreserve zur Vermeidung frühzeitiger Entleerung
-    fc_peak_shaving_kw: float = 20.0     # FC unterstützt primär bei hohen Defiziten
-
-    # Datengrundlage (zentraler Schalter)
-    # - time_resolution steuert, welche CSV-Datei verwendet wird.
-    #   1h -> stündliche Auswertung, 15min -> native viertelstündliche Auswertung.
-
-    time_resolution: Literal['1h', '15min'] = '1h'
-    data_dir: str = 'data'
-    data_csv_1h: str = 'data_annaheer_1h.csv'
-    data_csv_15min: str = 'data_annaheer_15min.csv'
+    fc_reserve_soc_target: float = 0.35  # Höhere Reserve für saisonalen H2-Aufbau
+    fc_peak_shaving_kw: float = 35.0     # FC vorrangig bei größeren Defiziten
+    fc_dispatch_max_kw: float = 18.0     # Begrenzung der FC-Abgabe pro Zeitschritt
 
     # Konstanten für H2-Eigenschaften
     _H2_MOLAR_MASS_KG_PER_MOL: ClassVar[float] = 0.00201588
@@ -101,7 +96,14 @@ class SystemConfig:
             raise ValueError("h2_total_mass_override_kg muss > 0 sein.")
         if self.h2_capacity_override_kwh is not None and self.h2_capacity_override_kwh <= 0:
             raise ValueError("h2_capacity_override_kwh muss > 0 sein.")
+        if self.fc_dispatch_max_kw <= 0:
+            raise ValueError("fc_dispatch_max_kw muss > 0 sein.")
+        if self.fc_dispatch_max_kw > self.fc_kw_max:
+            raise ValueError("fc_dispatch_max_kw darf fc_kw_max nicht überschreiten.")
 
+
+    # Berechnung der H2-Eigenschaften basierend auf den Eingabeparametern
+    
     @property
     def h2_temperature_k(self) -> float:
         return self.h2_temperature_c + 273.15

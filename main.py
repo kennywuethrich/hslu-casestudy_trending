@@ -54,13 +54,14 @@ def main():
     print("="*80 + "\n")
 
 
-def run_scenario(scenario_key: str, export: bool = True):
+def run_scenario(scenario_key: str, export: bool = True, include_plots: bool = True):
     """
     Schnelle Ausführung eines vordefinierten Szenarios.
     
     Args:
         scenario_key: Schlüssel aus SCENARIOS_LIBRARY
         export: Ob Ergebnisse exportiert werden sollen
+        include_plots: Ob Jahresübersichts-Plots erstellt werden sollen
         
     Example:
         >>> run_scenario('A_reference')
@@ -78,7 +79,7 @@ def run_scenario(scenario_key: str, export: bool = True):
     simulator.run_all_strategies(profiles)
     
     # Ausgabe
-    simulator.print_results()
+    simulator.print_results(include_plots=include_plots)
     
     if export:
         simulator.export_results()
@@ -107,7 +108,7 @@ def compare_all_scenarios(export: bool = True):
         print(f"Szenario: {scenario_key}")
         print(f"{'─'*80}\n")
         
-        simulator = run_scenario(scenario_key, export=False)
+        simulator = run_scenario(scenario_key, export=False, include_plots=False)
         all_results.append(simulator)
     
     # Vergleich erstellen

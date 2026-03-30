@@ -70,39 +70,6 @@ class H2Storage:
         return f"H2Storage(SOC={self.soc_pct:.1f}%, Capacity={self.capacity}kWh)"
 
 
-class EVStorage:
-    """
-    Vereinfachtes EV-Fleet-Modell mit SOC.
-
-    - `consume_drive_energy` modelliert Fahrenergiebedarf.
-    - `charge_with_power` lädt mit verfügbarer Leistung (Priorität vor H2-Speicherung).
-    """
-
-    def __init__(self, config: SystemConfig):
-        self.capacity = config.ev_capacity_kwh
-        self.soc_kwh = config.ev_initial_soc * self.capacity
-        self.max_charge_kw = config.ev_max_charge_kw
-
-    @property
-    def available_capacity(self) -> float:
-        return max(0.0, self.capacity - self.soc_kwh)
-
-    def consume_drive_energy(self, energy_kwh: float) -> float:
-        """Reduziert SOC durch Fahrenergie; Rückgabe ist ungedeckter Fahrbedarf [kWh]."""
-        taken = min(max(0.0, energy_kwh), self.soc_kwh)
-        self.soc_kwh -= taken
-        return max(0.0, energy_kwh - taken)
-
-    def charge_with_power(self, power_kw_available: float, dt_h: float) -> float:
-        """Lädt EV mit verfügbarer Leistung; Rückgabe ist tatsächlich verwendete Ladeleistung [kW]."""
-        if dt_h <= 0:
-            return 0.0
-        charge_kw = min(max(0.0, power_kw_available), self.max_charge_kw)
-        storable_kwh = min(self.available_capacity, charge_kw * dt_h)
-        self.soc_kwh += storable_kwh
-        return storable_kwh / dt_h
-
-
 class ThermalStorage:
     """
     Einfacher thermischer Speicher [kWh_th] zur WP-Lastverschiebung.
@@ -233,30 +200,6 @@ class HeatPump:
         self.cop = config.hp_cop
         self.p_th_max = config.hp_kw_th_max
         self._runtime_history = []
-
-    def cover_heat_demand(self, heat_demand: float, el_available: float) -> Dict[str, float]:
-        """
-        Deckt Wärmebedarf mit verfügbarer elektrischer Leistung.
-        
-        Args:
-            heat_demand: Wärmebedarf [kWh]
-            el_available: Verfügbare elektrische Leistung [kW]
-            
-        Returns:
-            dict: {'heat_out': kWh, 'el_used': kW, 'heat_unmet': kWh}
-        """
-        heat_possible_by_power = el_available * self.cop
-        heat_possible = min(heat_demand, self.p_th_max, heat_possible_by_power)
-        el_used = heat_possible / self.cop
-        heat_unmet = heat_demand - heat_possible
-        
-        self._runtime_history.append(el_used)
-        
-        return {
-            'heat_out': heat_possible,
-            'el_used': el_used,
-            'heat_unmet': heat_unmet
-        }
 
     def __repr__(self):
         return f"HeatPump(COP={self.cop}, P_th_max={self.p_th_max}kW)"

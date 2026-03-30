@@ -45,7 +45,6 @@ SCENARIOS_LIBRARY = {
         config=SystemConfig(
             price_buy_chf=0.38,
             price_sell_chf=0.16,
-            price_threshold_ely=0.28,
             price_threshold_fc=0.35,
         ),
         ev_mode='evening',

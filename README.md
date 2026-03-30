@@ -1,408 +1,104 @@
-# H2-Microgrid Energiesystem Simulation (OOP)
+# H2-Microgrid Simulation
 
-Eine moderne, objektorientierte Simulation eines Wasserstoff-Energiesystems mit PV, Elektrolyseur, Brennstoffzelle und Wärmepumpe.
+Schlanke Simulation fuer ein PV-H2-WP-System mit CSV-Lastprofilen.
 
-## 🎯 Überblick
+Ziel: einfache Struktur, klare Verantwortlichkeiten, leichter Refactor.
 
-Diese Simulation modelliert ein komplexes Energiesystem für einen Wohnkomplex mit:
+## Projektstruktur
 
-| Komponente | Kapazität | Funktion |
-|-----------|-----------|----------|
-| **PV-Anlage** | 87 kWp | Solarstromproduktion |
-| **Elektrolyseur** | 33 kW | H₂-Produktion aus Strom |
-| **H₂-Speicher** | 7650 kWh | Wasserstoff-Speicherung |
-| **Brennstoffzelle** | 34 kW | Stromerzeugung aus H₂ |
-| **Wärmepumpe** | 95 kW | Wärmeproduktion |
-| **E-Auto** | 40 kWh | Batterie-Elektromobilität |
-
-## 📁 Projektstruktur
-
-```
+```text
 Casestudy/
-├── __init__.py           # Paketinitialisierung
-├── main.py              # Benutzerfreundlicher Einstiegspunkt
-├── config.py            # Systemkonfiguration & Parameter
-├── components.py        # H2-System Komponenten
-├── profiles.py          # Energie-Lastprofile-Generator
-├── strategies.py        # Betriebsstrategien (Heuristik, Preis)
-├── analyzer.py          # KPI-Berechnung & Visualisierung
-├── scenario.py          # Szenarien-Definitionen
-├── simulator.py         # Hauptsimulations-Engine
-└── README.md           # Diese Datei
+|- main.py         # Einstieg und Szenario-Runner
+|- simulator.py    # Ablauf: Profile -> Strategien -> KPIs/Plots -> Export
+|- config.py       # Zentrale Parameter und H2-Physik
+|- scenario.py     # Vordefinierte Szenarien
+|- profiles.py     # CSV-Import und Zeitachsen-Aufbereitung
+|- strategies.py   # Strategie-Policies (nur Entscheidungsregeln)
+|- dispatch.py     # Gemeinsame Dispatch-Engine (physische Bilanz)
+|- components.py   # Komponentenmodelle (H2, ELY, FC, WP, thermischer Speicher)
+|- analyzer.py     # KPI-Berechnung und Jahresplots
+|- data/
+|  |- generate_data.py
+|  |- data_annaheer_1h.csv
+|  |- data_annaheer_15min.csv
+|- results/
 ```
 
-### 🏗️ Architektur-Übersicht
+## Architektur in 30 Sekunden
 
-```
-main.py (Einstiegspunkt)
-    ↓
-Simulator (Koordinator)
-    ├─→ ProfileGenerator (Lastprofile)
-    ├─→ Strategy (Heuristic/PriceBased)
-    │   ├─→ Components (H2Storage, ELY, FC, HP)
-    │   └─→ Profiles (Input-Daten)
-    └─→ ResultAnalyzer (KPIs & Plots)
-```
+1. profiles.py liefert einheitliche Zeitschritt-Daten.
+2. strategies.py waehlt nur noch, wann FC laufen darf.
+3. dispatch.py macht die komplette Energiebilanz pro Zeitschritt.
+4. analyzer.py berechnet KPIs und erzeugt Jahresplots.
+5. simulator.py orchestriert alles und exportiert CSV-Dateien.
 
-## 🚀 Schnelleinstieg
+Damit liegt die komplexe Physik nur an einer Stelle: dispatch.py.
 
-### 1. **Interaktiver Modus (Standard)**
+## Schnellstart
 
 ```bash
 python main.py
 ```
 
-Das Programm führt Sie durch folgende Schritte:
-1. Szenario-Auswahl (A, B oder C)
-2. Profil-Laden aus CSV (1h oder 15min)
-3. Strategie-Simulation (Heuristik & Preisbasis)
-4. Ergebnis-Ausgabe (KPIs und Plots)
-5. Automatischer Export (CSV)
-
-### Zeitauflösung in genau einem Schritt wählen
-
-Die Auflösung wird zentral in [config.py](config.py) eingestellt:
-
-```python
-time_resolution: Literal['1h', '15min'] = '1h'
-```
-
-- `1h`: stündliche Auswertung mit `data/data_annaheer_1h.csv`
-- `15min`: native viertelstündliche Auswertung mit `data/data_annaheer_15min.csv`
-
-Es ist kein zweiter Schalter mehr nötig.
-
-### 2. **Programmatischer Modus (Python-Skript)**
+Programmatisch:
 
 ```python
 from main import run_scenario
 
-# Schnell ein Szenario starten
-simulator = run_scenario('A_reference')
-
-# Ergebnisse abrufen
-kpis = simulator.get_kpis_summary()
-print(kpis)
+simulator = run_scenario('A_reference', include_plots=True)
+print(simulator.get_kpis_summary())
 ```
 
-### 3. **Alle Szenarien vergleichen**
+Alle Szenarien vergleichen:
 
 ```python
 from main import compare_all_scenarios
 
-# Führt A, B und C aus und vergleicht sie
-simulators = compare_all_scenarios()
+compare_all_scenarios()
 ```
 
-## 📊 Szenarien
+## Szenarien
 
-### Szenario A: Referenz (Abend-Laden)
-- **Strompreis:** 0.28 CHF/kWh (moderate Preise)
-- **E-Auto Laden:** 18:00-22:00 Uhr (abends)
-- **Beschreibung:** Baseline-Szenario mit moderaten Bedingungen
+- A_reference: Baseline.
+- B_high_price: hoeherer Strompreis, bessere Einspeiseverguetung.
+- C_workplace: alternative EV-Ladecharakteristik im Datenset.
 
-### Szenario B: Hohe Strompreise
-- **Strompreis:** 0.38 CHF/kWh (erhöht)
-- **Einspeisevergütung:** 0.16 CHF/kWh (bessere Vergütung)
-- **E-Auto Laden:** Abends
-- **Beschreibung:** Höhere Preisvolatilität → Mehr Speicheranreize
+## Aktive Visualisierungen
 
-### Szenario C: Workplace Charging
-- **Strompreis:** 0.28 CHF/kWh
-- **E-Auto Laden:** 08:00-17:00 Uhr (tagsüber am Arbeitsplatz)
-- **Beschreibung:** PV-optimiertes E-Auto Lademanagement
+- H2-SOC Jahresverlauf (Tag-Min/Tag-Mittel/Tag-Max).
+- Jahresuebersicht der Energiestroeme (monatlich und kumuliert).
+- KPI-Vergleich bei Szenariovergleichen.
 
-## 🎮 Betriebsstrategien
+## Datenschema fuer CSV-Import
 
-### Strategie 1: Heuristische Eigenverbrauchsoptimierung
-```
-Priorisierung:
-1. PV → direkt an Last
-2. Überschuss → Elektrolyseur (H₂ produzieren)
-3. H₂ im Speicher → Brennstoffzelle (bei Defizit)
-4. Noch fehlender Strom → vom Netz
-```
+Pflichtspalten:
 
-Ideal für: **Einfache, nachvollziehbare Steuerung**
+- datetime
+- pv_kw
+- load_el_kw
+- load_heat_kw
+- ev_demand_kw
 
-### Strategie 2: Preisbasierte Optimierung
-```
-Logik:
-- ELY: Nur bei Strompreis < Schwellenwert (0.20 CHF/kWh)
-- BZ: Bevorzugt bei Strompreis > Schwellenwert (0.30 CHF/kWh)
-- Ziel: Wirtschaftliche Optimierung
-```
+Hinweis: datetime wird mit UTC geparst und nach Europe/Zurich konvertiert.
 
-Ideal für: **Marktoptimierte Betriebsweise**
+## Wichtigste Konfigurationspunkte
 
-## 📈 Key Performance Indicators (KPIs)
+- time_resolution: 1h oder 15min.
+- H2-Tank ueber Volumen, Druck, Temperatur.
+- Optional Overwrites fuer H2-Dichte, H2-Masse oder H2-Kapazitaet.
+- FC-Regeln ueber fc_reserve_soc_target, fc_peak_shaving_kw, fc_dispatch_max_kw.
 
-Die Simulation berechnet automatisch:
+## Design-Regeln im Code
 
-| KPI | Einheit | Bedeutung |
-|-----|---------|-----------|
-| **Autarkiegrad** | % | Anteil Last ohne Netzbezug |
-| **Netzbezug** | kWh/a | Gesamter Stromimport |
-| **Netzeinspeisung** | kWh/a | Gesamte Stromexporte |
-| **Energiekosten** | CHF/a | Jährliche Stromkosten |
-| **CO₂-Emissionen** | tCO₂/a | Treibhausgasemissionen |
-| **MAC** | CHF/tCO₂ | Vermeidungskosten pro Tonne CO₂ |
-| **H₂-Erzeugung** | kWh/a | Wasserstoff-Produktion |
+- Neue Strategie: nur in strategies.py Policy ergaenzen.
+- Keine physische Bilanz in strategies.py duplizieren.
+- Dispatch-Anpassungen zentral in dispatch.py.
+- KPI/Plot-Aenderungen nur in analyzer.py.
 
-## 💻 Erweiterte Verwendung
+## Typische Befehle
 
-### Custom Szenario erstellen
-
-```python
-from config import SystemConfig
-from scenario import ScenarioManager, Scenario
-from simulator import Simulator
-
-# Custom Konfiguration
-config = SystemConfig(
-    price_buy_chf=0.30,      # Custom Preis
-    hp_cop=4.0,              # Bessere WP
-)
-
-# Custom Szenario
-scenario = ScenarioManager.create_custom(
-    name="Mein Custom-Szenario",
-    config=config,
-    ev_mode='daytime',
-    description="Erhöhte PV-Kapazität"
-)
-
-# Simulation starten
-sim = Simulator(scenario)
-profiles = sim.generate_profiles()
-sim.run_all_strategies(profiles)
-sim.print_results()
-```
-
-### Nur eine Strategie simulieren
-
-```python
-from config import SystemConfig
-from strategies import HeuristicStrategy
-from profiles import ProfileGenerator
-from simulator import Simulator
-from scenario import Scenario
-
-config = SystemConfig()
-scenario = Scenario("Test", config)
-sim = Simulator(scenario)
-
-# Profile generieren
-profiles = sim.generate_profiles()
-
-# Nur Heuristik
-strategy = HeuristicStrategy(config)
-results, kpis = sim.run_strategy(strategy, profiles)
-
-print(kpis)
-```
-
-### Ergebnisse exportieren
-
-```python
-simulator.export_results(csv_filepath="meine_ergebnisse.csv")
-```
-
-Exportierte Dateien:
-- `meine_ergebnisse_HeuristicStrategy.csv` – Stundenweise Werte
-- `meine_ergebnisse_PriceBasedStrategy.csv` – Stundenweise Werte
-- `alle_szenarien_kpi.csv` – Zusammenfassung KPIs
-
-## 📊 Visualisierungen
-
-Die Simulation erzeugt automatisch:
-
-1. **Wochenprofil (Sommer)**
-   - Strombilanz (PV, Last, Import/Export)
-   - H₂-System (ELY, BZ, Abwärme)
-   - H₂-Speicherstand
-
-2. **Wochenprofil (Winter)**
-   - Gleiche Diagramme für Winterwoche
-
-3. **KPI-Vergleich**
-   - 4-Panel Vergleich aller Strategien/Szenarien
-   - Autarkiegrad, Kosten, CO₂, MAC
-
-## 🗂️ Datenschema (CSV-only)
-
-Die Simulation verwendet ausschließlich CSV-Dateien aus [data/](data/).
-
-Pflichtspalten pro Zeitschritt:
-- `datetime`
-- `pv_kw`
-- `load_el_kw`
-- `load_heat_kw`
-- `ev_demand_kw`
-
-Zusätzliche Spalten in den generierten CSVs (für Transparenz):
-- `pv_irradiance_wh_m2`
-- `electricity_consumption_kwh_step`
-- `heat_demand_kwh_step`
-- `ev_demand_kwh_step`
-
-Hinweis:
-- Strompreis, Einspeisepreis und CO2-Intensität bleiben bewusst in `config.py` (szenarioabhängig).
-- Für neue Daten bitte `python .\\data\\generate_data.py` ausführen.
-
-## 🔧 Konfigurationsparameter
-
-Alle Parameter sind in `config.py` zentral definiert:
-
-```python
-@dataclass
-class SystemConfig:
-    # Anlagenleistungen [kW]
-    ely_kw_max: float = 33.0
-    fc_kw_max: float = 34.0
-    hp_kw_th_max: float = 95.0
-    
-    # H2-Speicher: physikalisch parametriert
-    h2_tank_volume_m3: float = 85.0
-    h2_pressure_bar: float = 30.0
-    h2_temperature_c: float = 15.0
-    h2_density_override_kg_m3: Optional[float] = None
-    h2_total_mass_override_kg: Optional[float] = None
-    h2_lhv_kwh_per_kg: float = 33.33
-    h2_capacity_override_kwh: Optional[float] = None
-    h2_initial_soc: float = 0.05  # 5%
-    h2_min_soc: float = 0.05     # 5% Reserve
-    
-    # Wirkungsgrade
-    ely_eff_el: float = 0.65
-    fc_eff_el: float = 0.50
-    hp_cop: float = 3.5
-    
-    # Kosten & CO₂
-    price_buy_chf: float = 0.28
-    price_sell_chf: float = 0.10
-    co2_grid_kg_kwh: float = 0.128
-
-    # Datengrundlage
-    time_resolution: Literal['1h', '15min'] = '1h'
-    data_dir: str = 'data'
-    data_csv_1h: str = 'data_annaheer_1h.csv'
-    data_csv_15min: str = 'data_annaheer_15min.csv'
-```
-
-## 🐛 Troubleshooting
-
-### "Modul nicht gefunden"
 ```bash
-# Stelle sicher, dass du im GithubRepo-Verzeichnis bin
-
+python main.py
+python -c "from main import run_scenario; run_scenario('A_reference', include_plots=True)"
+python data/generate_data.py
 ```
-
-### Plots werden nicht angezeigt
-```python
-import matplotlib
-matplotlib.use('TkAgg')  # Oder 'Qt5Agg'
-```
-
-### H₂-Speicher läuft leer
-→ Ist die Elektrisierung groß genug? Wechsel zu Szenario B (höhere Preise) oder erhöhe PV-Kapazität.
-
-## 📚 Klassenbeschreibungen
-
-### `Simulator`
-- Hauptkoordinator für Simulation
-- Verwaltet Profile, Strategien und Ergebnisse
-- `run_all_strategies()` – Alle Strategien ausführen
-
-### `Scenario`
-- Definiert ein Simulationsszenario
-- Enthält Config + EV-Mode + Beschreibung
-
-### `Strategy` (Abstract)
-- Basis für alle Betriebsstrategien
-- Konkrete Klassen: `HeuristicStrategy`, `PriceBasedStrategy`
-
-### `ResultAnalyzer`
-- Berechnet KPIs
-- Erstellt Visualisierungen
-- Exportiert Ergebnisse
-
-### `ProfileGenerator`
-- Lädt CSV-basierte Profile
-- `load_simulation_profiles()` – native 1h/15min Daten
-
-### Komponenten (`components.py`)
-- `H2Storage` – Wasserstoff-Speicher
-- `Electrolyzer` – Elektrolyseur
-- `FuelCell` – Brennstoffzelle
-- `HeatPump` – Wärmepumpe
-
-## 📝 Beispielskripte
-
-### Beispiel 1: Einfache Simulation
-```python
-#!/usr/bin/env python
-from main import run_scenario
-
-# Szenario A ausführen
-sim = run_scenario('A_reference')
-print("Simulation abgeschlossen!")
-```
-
-### Beispiel 2: Sensitivitätsanalyse
-```python
-from config import SystemConfig
-from scenario import Scenario
-from simulator import Simulator
-
-for hp_cop in [2.5, 3.0, 3.5, 4.0]:
-    config = SystemConfig(hp_cop=hp_cop)
-    scenario = Scenario(f"HP-COP:{hp_cop}", config)
-    sim = Simulator(scenario)
-    profiles = sim.generate_profiles()
-    sim.run_all_strategies(profiles)
-    kpis = sim.get_kpis_summary()
-    print(f"COP {hp_cop}: Autarky {kpis[0]['Autarkiegrad [%]']}%")
-```
-
-### Beispiel 3: Alle Szenarien parallel vergleichen
-```python
-from main import compare_all_scenarios
-
-compare_all_scenarios(export=True)
-```
-
-## 🎓 Was du gelernt hast
-
-Diese OOP-Struktur zeigt Best Practices:
-
-✅ **Separation of Concerns** – Jede Klasse hat eine Aufgabe  
-✅ **Wiederverwendbarkeit** – Code ist modular und erweiterbar  
-✅ **Testbarkeit** – Einzelne Komponenten können isoliert getestet werden  
-✅ **Wartbarkeit** – Änderungen beeinflussen nicht den ganzen Code  
-✅ **Skalierbarkeit** – Neue Strategien/Szenarien leicht hinzufügbar  
-
-## 📖 Ressourcen
-
-- **Energieeffizeiz:** Schweizer Stromnetzmix ~128 g CO₂/kWh
-- **Wasserstoff:** LHV ~3.0 kWh/Nm³
-- **Wärmepumpen:** COP typischerweise 3-4
-
-## 🔄 Zukünftige Erweiterungen
-
-- [ ] Anbindung echter Wetterdaten
-- [ ] Mehrjahresanalyse mit Degradation
-- [ ] Probabilistische Analysen
-- [ ] Marktpreisimport (EPEX)
-- [ ] Web-Interface
-- [ ] Unit-Tests
-
-## 📧 Support
-
-Bei Fragen oder Verbesserungsvorschlägen: Kontaktiere Kenny.
-
----
-
-**Version:** 1.0.0  
-**Datum:** März 2026  
-**Autor:** Kenny Wüthrich

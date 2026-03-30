@@ -24,10 +24,20 @@ YEAR = 2026
 NUM_APARTMENTS = 83
 PV_KWP = 87.0
 PV_AREA_M2 = 87
+# Gebäudestandard: steuert den spezifischen Transmissionsverlust (kW/K)
+# Wertebereich grob für gesamte Überbauung, kalibrierbar mit Messdaten.
+BUILDING_STANDARD = 'modern'  # 'modern', 'standard', 'old'
+
+# Raumtemperatur-/Heizungsannahmen
+INDOOR_SETPOINT_C = 20.5
+DHW_BASE_KW = 4.0
+DHW_MORNING_PEAK_KW = 4.5
+DHW_EVENING_PEAK_KW = 3.0
+
 # Drehung der Wohnblöcke relativ zur Nord-Süd-Achse (gegen den Uhrzeigersinn)
 BLOCK_ROTATIONS_DEG = [15, 30, 45]
 OUTPUT_RESOLUTIONS = ('1h', '15min')
-EV_MODE = 'daytime'  # 'evening', 'daytime', 'workplace'
+EV_MODE = 'evening'  # 'evening', 'daytime', 'workplace'
 
 # ============================================================================
 
@@ -161,9 +171,9 @@ def generate_load_profile(times, resolution: str, num_apartments=83):
     is_weekend = times.dayofweek >= 5  # Samstag/Sonntag
     weekday_factor[is_weekend] *= 0.85  # Wochenende: -15%
     
-    # Saisonalität (Winter mehr Verbrauch wegen Heizung + Licht)
+    # Saisonalität (Winter mehr Verbrauch wegen Licht/Haushalt, Sommer weniger)
     # Peak im Januar/Dezember, Minimum im Juli/August
-    seasonal_factor = 0.8 + 0.4 * np.sin(2 * np.pi * (days_of_year - 80) / 365.25)
+    seasonal_factor = 0.85 + 0.25 * np.cos(2 * np.pi * (days_of_year - 15) / 365.25)
     
     # Zufälliges Rauschen (Tag-zu-Tag Variabilität)
     random_noise = np.random.normal(loc=1.0, scale=0.1, size=len(times))
@@ -181,20 +191,56 @@ def generate_load_profile(times, resolution: str, num_apartments=83):
     return pd.Series(load_profile, index=times, name='electricity_consumption_kwh')
 
 
-def generate_heat_profile(times, resolution: str):
-    """Generiert synthetisches Wärmelastprofil der Überbauung [kWh pro Zeitschritt]."""
-    hours = times.hour
+def generate_outdoor_temperature(times):
+    """
+    Vereinfachtes Außenluft-Temperaturprofil Zürich [°C].
+    - Saisonal: kalt im Winter, warm im Sommer
+    - Tagesgang: tagsüber wärmer, nachts kälter
+    """
+    np.random.seed(42)
     day_of_year = times.dayofyear
+    hour = times.hour + times.minute / 60.0
 
-    # Jahresgang + Warmwasseranteil
-    seasonal_heat_kw = 40 + 40 * np.cos(2 * np.pi * (day_of_year - 15) / 365.25)
-    warmwater_kw = 8 * (
-        np.exp(-0.5 * ((hours - 7) / 1.0) ** 2)
-        + 0.5 * np.exp(-0.5 * ((hours - 20) / 1.0) ** 2)
+    seasonal_c = 10.0 + 10.5 * np.sin(2 * np.pi * (day_of_year - 81) / 365.25)
+    diurnal_c = 3.0 * np.sin(2 * np.pi * (hour - 14) / 24.0)
+    noise_c = np.random.normal(loc=0.0, scale=1.2, size=len(times))
+
+    temp_c = seasonal_c + diurnal_c + noise_c
+    temp_c = np.clip(temp_c, -12.0, 35.0)
+    return pd.Series(temp_c, index=times, name='outdoor_temp_c')
+
+
+def _building_heat_loss_coeff_kw_per_k(building_standard: str) -> float:
+    """Transmissionsverlustkoeffizient der Überbauung [kW/K]."""
+    standard = building_standard.strip().lower()
+    if standard == 'modern':
+        return 2.8
+    if standard == 'standard':
+        return 4.5
+    if standard == 'old':
+        return 6.5
+    raise ValueError("building_standard muss 'modern', 'standard' oder 'old' sein")
+
+
+def generate_heat_profile(times, resolution: str, outdoor_temp_c: pd.Series,
+                          building_standard: str = 'modern'):
+    """Generiert temperaturabhängiges Wärmelastprofil [kWh pro Zeitschritt]."""
+    hours = times.hour
+    dt_h = 1.0 if resolution == '1h' else 0.25
+
+    # Raumheizung über Temperaturdifferenz (heizt auch bei >5°C, sofern unter Setpoint)
+    ua_kw_per_k = _building_heat_loss_coeff_kw_per_k(building_standard)
+    delta_t = np.maximum(0.0, INDOOR_SETPOINT_C - outdoor_temp_c.to_numpy())
+    space_heating_kw = ua_kw_per_k * delta_t
+
+    # Trinkwarmwasser als ganzjähriger Sockel mit Tagespeaks
+    dhw_kw = (
+        DHW_BASE_KW
+        + DHW_MORNING_PEAK_KW * np.exp(-0.5 * ((hours - 7) / 1.1) ** 2)
+        + DHW_EVENING_PEAK_KW * np.exp(-0.5 * ((hours - 20) / 1.3) ** 2)
     )
 
-    heat_kw = np.clip(seasonal_heat_kw + warmwater_kw, 5.0, 95.0)
-    dt_h = 1.0 if resolution == '1h' else 0.25
+    heat_kw = np.clip(space_heating_kw + dhw_kw, 5.0, 95.0)
     heat_kwh_step = heat_kw * dt_h
     return pd.Series(heat_kwh_step, index=times, name='heat_demand_kwh')
 
@@ -240,7 +286,13 @@ def build_dataset(resolution: str) -> pd.DataFrame:
 
     pv_irradiance = generate_pv_data(times, pv_area_m2=PV_AREA_M2)
     load_kwh_step = generate_load_profile(times, resolution=resolution, num_apartments=NUM_APARTMENTS)
-    heat_kwh_step = generate_heat_profile(times, resolution=resolution)
+    outdoor_temp_c = generate_outdoor_temperature(times)
+    heat_kwh_step = generate_heat_profile(
+        times,
+        resolution=resolution,
+        outdoor_temp_c=outdoor_temp_c,
+        building_standard=BUILDING_STANDARD,
+    )
     ev_kwh_step = generate_ev_profile(times, resolution=resolution, ev_mode=EV_MODE)
 
     dt_h = 1.0 if resolution == '1h' else 0.25
@@ -257,6 +309,7 @@ def build_dataset(resolution: str) -> pd.DataFrame:
         'load_el_kw': load_el_kw.values,
         'load_heat_kw': load_heat_kw.values,
         'ev_demand_kw': ev_demand_kw.values,
+        'outdoor_temp_c': outdoor_temp_c.values,
         # Zusätzliche Transparenz-Spalten
         'pv_irradiance_wh_m2': pv_irradiance.values,
         'electricity_consumption_kwh_step': load_kwh_step.values,
@@ -273,7 +326,7 @@ def main():
 
     for resolution in OUTPUT_RESOLUTIONS:
         df = build_dataset(resolution)
-        output_file = output_dir / f'data_annaheer_{resolution}.csv'
+        output_file = output_dir / f'data_anna-heer_{resolution}.csv'
         df.to_csv(output_file, index=False)
         created[resolution] = (output_file, df)
 

@@ -6,7 +6,7 @@ import pandas as pd
 import numpy as np
 import os
 import matplotlib.pyplot as plt
-from typing import Dict, List, Optional
+from typing import Dict, List
 from config import SystemConfig
 
 
@@ -88,124 +88,11 @@ class ResultAnalyzer:
             'H2-Erzeugung [kWh]': round((result_df['ely_power_kw'] * self.config.ely_eff_el * dt_h).sum(), 0),
         }
 
-    def _find_most_dynamic_week_start_day(self, result_df: pd.DataFrame) -> int:
-        """Wählt die Woche mit der größten H2-SOC-Spannweite (Peak-to-Peak)."""
-        if 'h2_soc_kwh' not in result_df.columns or len(result_df) == 0:
-            return 0
-
-        dt_h = float(result_df['dt_h'].iloc[0]) if 'dt_h' in result_df.columns else 1.0
-        steps_per_day = int(round(24 / dt_h))
-        week_steps = 7 * steps_per_day
-        if len(result_df) < week_steps:
-            return 0
-
-        best_start = 0
-        best_span = -1.0
-        max_start = len(result_df) - week_steps
-        for start in range(0, max_start + 1, steps_per_day):
-            week_soc = result_df['h2_soc_kwh'].iloc[start:start + week_steps]
-            span = float(week_soc.max() - week_soc.min())
-            if span > best_span:
-                best_span = span
-                best_start = start
-
-        return int(best_start / steps_per_day)
-
     def _build_time_index(self, result_df: pd.DataFrame) -> pd.DatetimeIndex:
         """Erstellt konsistenten Zeitindex für Visualisierungen."""
         dt_h = float(result_df['dt_h'].iloc[0]) if 'dt_h' in result_df.columns else 1.0
         freq = f"{int(round(dt_h * 60))}min"
         return pd.date_range(start='2026-01-01', periods=len(result_df), freq=freq)
-    
-    def plot_week(self, result_df: pd.DataFrame, title: str = "Wochenprofil", show: bool = False,
-                  start_day: Optional[int] = 172, save_path: str = None,
-                  adaptive_soc_axis: bool = True):
-        """
-        Erstellt detailliertes Wochenprofil.
-        
-        Args:
-            result_df: DataFrame mit Simulationsergebnissen
-            title: Titel für den Plot
-            start_day: Starttag (0-365)
-            save_path: Optional: Pfad zum Speichern
-        """
-        dt_h = float(result_df['dt_h'].iloc[0]) if 'dt_h' in result_df.columns else 1.0
-        steps_per_day = int(round(24 / dt_h))
-        if start_day is None:
-            start_day = self._find_most_dynamic_week_start_day(result_df)
-
-        start = start_day * steps_per_day
-        end = start + 7 * steps_per_day
-        week = result_df.iloc[start:end].reset_index(drop=True)
-        
-        fig, axes = plt.subplots(3, 1, figsize=(14, 10), sharex=True)
-        fig.suptitle(title, fontsize=14, fontweight='bold')
-        hours = range(len(week))
-        
-        # Plot 1: Strombilanz
-        ax1 = axes[0]
-        ax1.fill_between(hours, 0, week['pv_kw'],
-                         alpha=0.7, color='gold', label='PV-Erzeugung')
-        ev_plot_col = 'ev_charge_kw' if 'ev_charge_kw' in week.columns else 'ev_demand_kw'
-        ax1.fill_between(hours, 0, -(week['load_el_kw'] + week[ev_plot_col]),
-                         alpha=0.5, color='steelblue', label='El. Last + E-Auto')
-        ax1.fill_between(hours, 0, -week['hp_el_kw'],
-                         alpha=0.5, color='orange', label='WP Strom')
-        ax1.plot(hours, week['grid_import_kw'], 'r-', lw=1.5, label='Netzbezug')
-        ax1.plot(hours, -week['grid_export_kw'], 'g-', lw=1.5, label='Einspeisung')
-        ax1.axhline(0, color='black', lw=0.5)
-        ax1.set_ylabel('Leistung [kW]')
-        ax1.legend(loc='upper right', fontsize=8)
-        ax1.grid(True, alpha=0.3)
-        ax1.set_title('Strombilanz')
-        
-        # Plot 2: ELY und BZ
-        ax2 = axes[1]
-        ax2.fill_between(hours, 0, week['ely_power_kw'],
-                         alpha=0.7, color='purple', label='Elektrolyseur')
-        ax2.fill_between(hours, 0, week['fc_power_kw'],
-                         alpha=0.7, color='teal', label='Brennstoffzelle')
-        ax2.fill_between(hours, 0, week['heat_from_waste_kw'],
-                         alpha=0.4, color='red', label='Abwärme genutzt')
-        ax2.set_ylabel('Leistung [kW]')
-        ax2.legend(loc='upper right', fontsize=8)
-        ax2.grid(True, alpha=0.3)
-        ax2.set_title('H2-System')
-        
-        # Plot 3: H2-SOC
-        ax3 = axes[2]
-        soc_pct = week['h2_soc_kwh'] / self.config.h2_capacity_kwh * 100
-        ax3.plot(hours, soc_pct, 'darkgreen', lw=2, label='H2-SOC')
-        if adaptive_soc_axis and len(soc_pct) > 0:
-            soc_min = float(soc_pct.min())
-            soc_max = float(soc_pct.max())
-            span = max(2.0, soc_max - soc_min)
-            margin = max(1.0, span * 0.2)
-            lower = max(0.0, soc_min - margin)
-            upper = min(105.0, soc_max + margin)
-            if upper - lower < 5.0:
-                mid = 0.5 * (upper + lower)
-                lower = max(0.0, mid - 2.5)
-                upper = min(105.0, mid + 2.5)
-            ax3.set_ylim(lower, upper)
-        else:
-            ax3.set_ylim(0, 105)
-        ax3.axhline(5, color='red', ls='--', lw=1, label='Min SOC')
-        ax3.set_ylabel('H2-SOC [%]')
-        ax3.set_xlabel('Zeitschritte der Woche')
-        ax3.legend(loc='upper right', fontsize=8)
-        ax3.grid(True, alpha=0.3)
-        ax3.set_title('Wasserstoff-Speicherstand')
-        
-        plt.tight_layout()
-        
-        if save_path:
-            resolved_path = self._resolve_output_path(save_path)
-            plt.savefig(resolved_path, dpi=150)
-            print(f"  ✓ Gespeichert: {resolved_path}")
-        
-        # plt.show()
-        plt.close(fig)
 
     def plot_h2_soc_year(self, result_df: pd.DataFrame, title: str = "H2-SOC Jahresverlauf",
                          save_path: str = None):
@@ -255,6 +142,100 @@ class ResultAnalyzer:
             lower = max(0.0, mid - 3.0)
             upper = min(105.0, mid + 3.0)
         ax.set_ylim(lower, upper)
+
+        plt.tight_layout()
+
+        if save_path:
+            resolved_path = self._resolve_output_path(save_path)
+            plt.savefig(resolved_path, dpi=150)
+            print(f"  ✓ Gespeichert: {resolved_path}")
+
+        plt.close(fig)
+
+    def plot_year_energy_overview(self, result_df: pd.DataFrame,
+                                  title: str = "Jahresübersicht Energiebilanz",
+                                  save_path: str = None):
+        """
+        Übersichtliche Jahresdarstellung mit Fokus auf:
+        - Netzbezug
+        - Netzeinspeisung
+        - Strom für H2-Umwandlung (ELY)
+        - Strom für EV-Ladung
+        """
+        if len(result_df) == 0:
+            return
+
+        dt_h = result_df['dt_h'] if 'dt_h' in result_df.columns else pd.Series(1.0, index=result_df.index)
+        time_index = self._build_time_index(result_df)
+
+        ev_col = 'ev_charge_kw' if 'ev_charge_kw' in result_df.columns else 'ev_demand_kw'
+
+        flows = pd.DataFrame({
+            'datetime': time_index,
+            'pv_kwh': result_df['pv_kw'].to_numpy() * dt_h.to_numpy(),
+            'load_el_kwh': result_df['load_el_kw'].to_numpy() * dt_h.to_numpy(),
+            'hp_el_kwh': result_df['hp_el_kw'].to_numpy() * dt_h.to_numpy(),
+            'ev_charge_kwh': result_df[ev_col].to_numpy() * dt_h.to_numpy(),
+            'grid_import_kwh': result_df['grid_import_kw'].to_numpy() * dt_h.to_numpy(),
+            'grid_export_kwh': result_df['grid_export_kw'].to_numpy() * dt_h.to_numpy(),
+            'ely_el_kwh': result_df['ely_power_kw'].to_numpy() * dt_h.to_numpy(),
+        }).set_index('datetime')
+
+        monthly = flows.resample('ME').sum()
+        cumulative = flows.cumsum()
+
+        fig, axes = plt.subplots(3, 1, figsize=(14, 12), sharex=False)
+        fig.suptitle(title, fontsize=14, fontweight='bold')
+
+        # 1) Monatssummen der angefragten vier Flüsse
+        ax1 = axes[0]
+        x = np.arange(len(monthly.index))
+        w = 0.2
+        ax1.bar(x - 1.5 * w, monthly['grid_import_kwh'], width=w, label='Netzbezug', color='#d95f02')
+        ax1.bar(x - 0.5 * w, monthly['grid_export_kwh'], width=w, label='Netzeinspeisung', color='#1b9e77')
+        ax1.bar(x + 0.5 * w, monthly['ely_el_kwh'], width=w, label='Strom -> H2 (ELY)', color='#7570b3')
+        ax1.bar(x + 1.5 * w, monthly['ev_charge_kwh'], width=w, label='Strom -> EV', color='#66a61e')
+        ax1.set_ylabel('Energie [kWh/Monat]')
+        ax1.set_title('Monatliche Energieströme (Kernflüsse)')
+        ax1.set_xticks(x)
+        ax1.set_xticklabels([d.strftime('%b') for d in monthly.index])
+        ax1.grid(True, axis='y', alpha=0.3)
+        ax1.legend(loc='upper right', fontsize=8)
+
+        # 2) Kontext: PV-Erzeugung vs. elektrische Nachfrage
+        ax2 = axes[1]
+        total_demand = monthly['load_el_kwh'] + monthly['hp_el_kwh'] + monthly['ev_charge_kwh']
+        ax2.plot(monthly.index, monthly['pv_kwh'], lw=2.2, color='#e6ab02', label='PV-Erzeugung')
+        ax2.plot(monthly.index, total_demand, lw=2.2, color='#333333', label='El. Nachfrage gesamt')
+        ax2.fill_between(monthly.index, monthly['pv_kwh'].values, total_demand.values,
+                         where=(monthly['pv_kwh'].values >= total_demand.values),
+                         color='#a6d854', alpha=0.25, interpolate=True, label='Monatlicher Überschuss')
+        ax2.set_ylabel('Energie [kWh/Monat]')
+        ax2.set_title('PV vs. elektrische Gesamtnachfrage')
+        ax2.grid(True, alpha=0.3)
+        ax2.legend(loc='upper right', fontsize=8)
+
+        # 3) Kumulierte Jahresverläufe der Kernflüsse
+        ax3 = axes[2]
+        ax3.plot(cumulative.index, cumulative['grid_import_kwh'], color='#d95f02', lw=1.8, label='kumuliert Netzbezug')
+        ax3.plot(cumulative.index, cumulative['grid_export_kwh'], color='#1b9e77', lw=1.8, label='kumuliert Einspeisung')
+        ax3.plot(cumulative.index, cumulative['ely_el_kwh'], color='#7570b3', lw=1.8, label='kumuliert Strom -> H2')
+        ax3.plot(cumulative.index, cumulative['ev_charge_kwh'], color='#66a61e', lw=1.8, label='kumuliert Strom -> EV')
+        ax3.set_ylabel('Energie [kWh]')
+        ax3.set_title('Kumulierte Jahresverläufe')
+        ax3.grid(True, alpha=0.3)
+        ax3.legend(loc='upper left', fontsize=8)
+
+        summary = (
+            f"Jahressummen\n"
+            f"Netzbezug: {flows['grid_import_kwh'].sum():,.0f} kWh\n"
+            f"Einspeisung: {flows['grid_export_kwh'].sum():,.0f} kWh\n"
+            f"ELY-Strom: {flows['ely_el_kwh'].sum():,.0f} kWh\n"
+            f"EV-Ladestrom: {flows['ev_charge_kwh'].sum():,.0f} kWh"
+        )
+        ax3.text(0.995, 0.03, summary, transform=ax3.transAxes,
+                 ha='right', va='bottom', fontsize=9,
+                 bbox=dict(boxstyle='round,pad=0.3', facecolor='white', alpha=0.85, edgecolor='#888'))
 
         plt.tight_layout()
 
