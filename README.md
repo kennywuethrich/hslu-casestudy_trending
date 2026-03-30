@@ -42,7 +42,7 @@ Casestudy/
 |- results/
 ```
 
-## Lesereihenfolge fÜr Menschen
+## Übersicht fürs Verständnis
 
 Wenn du neu im Projekt bist, lies die Dateien in dieser Reihenfolge:
 
