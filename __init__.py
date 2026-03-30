@@ -25,7 +25,7 @@ Schnelleinstieg:
 __version__ = "1.0.0"
 __author__ = "H2-Microgrid Team"
 
-from .config import SystemConfig, SCENARIOS
+from .config import SystemConfig
 from .components import H2Storage, Electrolyzer, FuelCell, HeatPump
 from .profiles import ProfileGenerator
 from .strategies import Strategy, HeuristicStrategy, PriceBasedStrategy
@@ -36,7 +36,6 @@ from .main import run_scenario, compare_all_scenarios
 
 __all__ = [
     'SystemConfig',
-    'SCENARIOS',
     'H2Storage',
     'Electrolyzer',
     'FuelCell',

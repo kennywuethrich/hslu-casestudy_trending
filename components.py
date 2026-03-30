@@ -70,6 +70,65 @@ class H2Storage:
         return f"H2Storage(SOC={self.soc_pct:.1f}%, Capacity={self.capacity}kWh)"
 
 
+class EVStorage:
+    """
+    Vereinfachtes EV-Fleet-Modell mit SOC.
+
+    - `consume_drive_energy` modelliert Fahrenergiebedarf.
+    - `charge_with_power` lädt mit verfügbarer Leistung (Priorität vor H2-Speicherung).
+    """
+
+    def __init__(self, config: SystemConfig):
+        self.capacity = config.ev_capacity_kwh
+        self.soc_kwh = config.ev_initial_soc * self.capacity
+        self.max_charge_kw = config.ev_max_charge_kw
+
+    @property
+    def available_capacity(self) -> float:
+        return max(0.0, self.capacity - self.soc_kwh)
+
+    def consume_drive_energy(self, energy_kwh: float) -> float:
+        """Reduziert SOC durch Fahrenergie; Rückgabe ist ungedeckter Fahrbedarf [kWh]."""
+        taken = min(max(0.0, energy_kwh), self.soc_kwh)
+        self.soc_kwh -= taken
+        return max(0.0, energy_kwh - taken)
+
+    def charge_with_power(self, power_kw_available: float, dt_h: float) -> float:
+        """Lädt EV mit verfügbarer Leistung; Rückgabe ist tatsächlich verwendete Ladeleistung [kW]."""
+        if dt_h <= 0:
+            return 0.0
+        charge_kw = min(max(0.0, power_kw_available), self.max_charge_kw)
+        storable_kwh = min(self.available_capacity, charge_kw * dt_h)
+        self.soc_kwh += storable_kwh
+        return storable_kwh / dt_h
+
+
+class ThermalStorage:
+    """
+    Einfacher thermischer Speicher [kWh_th] zur WP-Lastverschiebung.
+    """
+
+    def __init__(self, config: SystemConfig):
+        self.capacity_kwh = config.thermal_storage_capacity_kwh
+        self.soc_kwh = config.thermal_initial_soc * self.capacity_kwh
+
+    @property
+    def free_capacity(self) -> float:
+        return max(0.0, self.capacity_kwh - self.soc_kwh)
+
+    def charge(self, heat_kwh: float) -> float:
+        """Speichert Wärme; Rückgabe ist tatsächlich gespeicherte Wärme [kWh]."""
+        actual = min(max(0.0, heat_kwh), self.free_capacity)
+        self.soc_kwh += actual
+        return actual
+
+    def discharge(self, heat_kwh: float) -> float:
+        """Entnimmt Wärme; Rückgabe ist tatsächlich bereitgestellte Wärme [kWh]."""
+        actual = min(max(0.0, heat_kwh), self.soc_kwh)
+        self.soc_kwh -= actual
+        return actual
+
+
 class Electrolyzer:
     """
     Elektrolyseur: Wandelt Strom in H2 (chemische Energie) + Abwärme.
@@ -83,12 +142,13 @@ class Electrolyzer:
         self.eff_th = config.ely_eff_th      # Strom → Abwärme Effizienz
         self._runtime_history = []
 
-    def run(self, power_available: float) -> Dict[str, float]:
+    def run(self, power_available: float, dt_h: float = 1.0) -> Dict[str, float]:
         """
         Betreibt Elektrolyseur mit verfügbarer Leistung.
         
         Args:
             power_available: Verfügbare Leistung [kW]
+            dt_h: Länge des Zeitschritts in Stunden
             
         Returns:
             dict: {'power_used': kW, 'h2_produced': kWh, 'heat_produced': kWh}
@@ -98,8 +158,8 @@ class Electrolyzer:
             return {'power_used': 0.0, 'h2_produced': 0.0, 'heat_produced': 0.0}
 
         power_used = min(power_available, self.p_max)
-        h2_produced = power_used * self.eff_el
-        heat_produced = power_used * self.eff_th
+        h2_produced = power_used * self.eff_el * dt_h
+        heat_produced = power_used * self.eff_th * dt_h
         
         self._runtime_history.append(power_used)
         
@@ -127,7 +187,7 @@ class FuelCell:
         self.eff_th = config.fc_eff_th      # H2 → Abwärme Effizienz
         self._runtime_history = []
 
-    def run(self, power_needed: float, h2_available: float) -> Dict[str, float]:
+    def run(self, power_needed: float, h2_available: float, dt_h: float = 1.0) -> Dict[str, float]:
         """
         Betreibt Brennstoffzelle unter Berücksichtigung von 
         Leistungsbedarf und H2-Verfügbarkeit.
@@ -135,14 +195,15 @@ class FuelCell:
         Args:
             power_needed: Benötigte Leistung [kW]
             h2_available: Verfügbarer Wasserstoff [kWh]
+            dt_h: Länge des Zeitschritts in Stunden
             
         Returns:
             dict: {'power_out': kW, 'h2_used': kWh, 'heat_produced': kWh}
         """
         power_target = min(power_needed, self.p_max)
-        h2_needed = power_target / self.eff_el
+        h2_needed = (power_target * dt_h) / self.eff_el
         h2_used = min(h2_needed, h2_available)
-        power_out = h2_used * self.eff_el
+        power_out = (h2_used * self.eff_el / dt_h) if dt_h > 0 else 0.0
 
         # Mindestlast-Check
         if power_out < self.p_min:

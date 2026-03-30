@@ -54,10 +54,23 @@ python main.py
 
 Das Programm führt Sie durch folgende Schritte:
 1. Szenario-Auswahl (A, B oder C)
-2. Profil-Generierung (Jahresprofile)
+2. Profil-Laden aus CSV (1h oder 15min)
 3. Strategie-Simulation (Heuristik & Preisbasis)
 4. Ergebnis-Ausgabe (KPIs und Plots)
 5. Automatischer Export (CSV)
+
+### Zeitauflösung in genau einem Schritt wählen
+
+Die Auflösung wird zentral in [config.py](config.py) eingestellt:
+
+```python
+time_resolution: Literal['1h', '15min'] = '1h'
+```
+
+- `1h`: stündliche Auswertung mit `data/data_annaheer_1h.csv`
+- `15min`: native viertelstündliche Auswertung mit `data/data_annaheer_15min.csv`
+
+Es ist kein zweiter Schalter mehr nötig.
 
 ### 2. **Programmatischer Modus (Python-Skript)**
 
@@ -147,7 +160,6 @@ from simulator import Simulator
 
 # Custom Konfiguration
 config = SystemConfig(
-    pv_kwp=100,              # Größere PV
     price_buy_chf=0.30,      # Custom Preis
     hp_cop=4.0,              # Bessere WP
 )
@@ -217,6 +229,27 @@ Die Simulation erzeugt automatisch:
    - 4-Panel Vergleich aller Strategien/Szenarien
    - Autarkiegrad, Kosten, CO₂, MAC
 
+## 🗂️ Datenschema (CSV-only)
+
+Die Simulation verwendet ausschließlich CSV-Dateien aus [data/](data/).
+
+Pflichtspalten pro Zeitschritt:
+- `datetime`
+- `pv_kw`
+- `load_el_kw`
+- `load_heat_kw`
+- `ev_demand_kw`
+
+Zusätzliche Spalten in den generierten CSVs (für Transparenz):
+- `pv_irradiance_wh_m2`
+- `electricity_consumption_kwh_step`
+- `heat_demand_kwh_step`
+- `ev_demand_kwh_step`
+
+Hinweis:
+- Strompreis, Einspeisepreis und CO2-Intensität bleiben bewusst in `config.py` (szenarioabhängig).
+- Für neue Daten bitte `python .\\data\\generate_data.py` ausführen.
+
 ## 🔧 Konfigurationsparameter
 
 Alle Parameter sind in `config.py` zentral definiert:
@@ -225,14 +258,19 @@ Alle Parameter sind in `config.py` zentral definiert:
 @dataclass
 class SystemConfig:
     # Anlagenleistungen [kW]
-    pv_kwp: float = 87.0
     ely_kw_max: float = 33.0
     fc_kw_max: float = 34.0
     hp_kw_th_max: float = 95.0
     
-    # Speicher
-    h2_capacity_kwh: float = 7650.0
-    h2_initial_soc: float = 0.3  # 30%
+    # H2-Speicher: physikalisch parametriert
+    h2_tank_volume_m3: float = 85.0
+    h2_pressure_bar: float = 30.0
+    h2_temperature_c: float = 15.0
+    h2_density_override_kg_m3: Optional[float] = None
+    h2_total_mass_override_kg: Optional[float] = None
+    h2_lhv_kwh_per_kg: float = 33.33
+    h2_capacity_override_kwh: Optional[float] = None
+    h2_initial_soc: float = 0.05  # 5%
     h2_min_soc: float = 0.05     # 5% Reserve
     
     # Wirkungsgrade
@@ -244,6 +282,12 @@ class SystemConfig:
     price_buy_chf: float = 0.28
     price_sell_chf: float = 0.10
     co2_grid_kg_kwh: float = 0.128
+
+    # Datengrundlage
+    time_resolution: Literal['1h', '15min'] = '1h'
+    data_dir: str = 'data'
+    data_csv_1h: str = 'data_annaheer_1h.csv'
+    data_csv_15min: str = 'data_annaheer_15min.csv'
 ```
 
 ## 🐛 Troubleshooting
@@ -284,8 +328,8 @@ matplotlib.use('TkAgg')  # Oder 'Qt5Agg'
 - Exportiert Ergebnisse
 
 ### `ProfileGenerator`
-- Generiert synthetische Jahresprofile
-- `generate_annual_profiles()` – PV, Last, Wärme, Preise
+- Lädt CSV-basierte Profile
+- `load_simulation_profiles()` – native 1h/15min Daten
 
 ### Komponenten (`components.py`)
 - `H2Storage` – Wasserstoff-Speicher
@@ -355,10 +399,10 @@ Diese OOP-Struktur zeigt Best Practices:
 
 ## 📧 Support
 
-Bei Fragen oder Verbesserungsvorschlägen: Kontaktiere deinen Betreuer.
+Bei Fragen oder Verbesserungsvorschlägen: Kontaktiere Kenny.
 
 ---
 
 **Version:** 1.0.0  
 **Datum:** März 2026  
-**Autor:** H2-Microgrid Team
+**Autor:** Kenny Wüthrich

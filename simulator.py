@@ -5,7 +5,6 @@ Simulator-Modul: Koordiniert die gesamte H2-Microgrid Simulation.
 import pandas as pd
 import os
 from typing import List, Dict, Tuple
-from config import SystemConfig
 from profiles import ProfileGenerator
 from strategies import Strategy, HeuristicStrategy, PriceBasedStrategy
 from analyzer import ResultAnalyzer
@@ -48,7 +47,7 @@ class Simulator:
     
     def generate_profiles(self, hours: int = 8760) -> pd.DataFrame:
         """
-        Generiert oder lädt Energieprofile.
+        Lädt Energieprofile aus CSV gemäß zentraler Konfiguration.
         
         Args:
             hours: Anzahl Stunden (Standard: 8760 = 1 Jahr)
@@ -56,12 +55,12 @@ class Simulator:
         Returns:
             pd.DataFrame: Vollständige Energieprofile
         """
-        print(f"  Generiere Profile ({hours} Stunden)...")
-        profiles = self.profile_generator.generate_annual_profiles(
-            hours=hours,
-            ev_mode=self.scenario.ev_mode
-        )
-        print(f"  ✓ Profile generiert")
+        del hours  # CSV-only Modus: Zeitschritte kommen vollständig aus Datendatei.
+
+        mode = self.config.time_resolution
+        print(f"  Lade Profile aus CSV (Auflösung: {mode})...")
+        profiles = self.profile_generator.load_simulation_profiles(self.config)
+        print(f"  ✓ Profile geladen ({len(profiles)} Zeitschritte)")
         return profiles
     
     def run_strategy(self, strategy: Strategy, 
@@ -166,17 +165,17 @@ class Simulator:
         for strategy_key, result in self.results.items():
             result_df = result['result_df']
             
-            # Sommerwoche
-            title = f"{self.scenario.name} – {strategy_key} – Sommerwoche"
-            save_path = f"woche_sommer_{strategy_key.lower()}.png"
+            # Dynamischste Woche (größte H2-SOC-Änderung)
+            title = f"{self.scenario.name} – {strategy_key} – Dynamischste Woche"
+            save_path = f"woche_dynamisch_{strategy_key.lower()}.png"
             self.analyzer.plot_week(result_df, title=title,
-                                   start_day=172, save_path=save_path)
-            
-            # Winterwoche
-            title = f"{self.scenario.name} – {strategy_key} – Winterwoche"
-            save_path = f"woche_winter_{strategy_key.lower()}.png"
-            self.analyzer.plot_week(result_df, title=title,
-                                   start_day=10, save_path=save_path)
+                                   start_day=None, save_path=save_path,
+                                   adaptive_soc_axis=True)
+
+            # Jahres-/Saisonverlauf H2-SOC
+            title = f"{self.scenario.name} – {strategy_key} – H2-SOC Jahresverlauf"
+            save_path = f"h2_soc_jahr_{strategy_key.lower()}.png"
+            self.analyzer.plot_h2_soc_year(result_df, title=title, save_path=save_path)
         
         # KPI-Vergleich
         kpis_list = self.get_kpis_summary()
