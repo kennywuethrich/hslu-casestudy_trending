@@ -2,6 +2,12 @@
 H2-Microgrid Energiesystem Simulation
 =====================================
 
+Entwickler-Kurzinfo:
+- Zweck: Paketoberflaeche mit zentralen Imports fuer einfache Nutzung.
+- Inputs: Keine Laufzeitinputs; statische Exportdefinition.
+- Outputs: Oeffentliche API ueber __all__.
+- Typische Aenderungen: Neue exportierte Klassen/Funktionen.
+
 Ein objektorientiertes Simulation-Framework für Wasserstoff-Energiesysteme
 mit PV-Erzeugung, Elektrolyseur, Brennstoffzelle und Wärmepumpe.
 

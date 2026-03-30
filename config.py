@@ -1,6 +1,11 @@
 """
-Konfigurationsmodul für H2-Microgrid Energiesystem Simulation.
-Enthält alle Systemparameter und Konfigurationen.
+Zentrale Konfiguration für Modellparameter und Validierungen.
+
+Entwickler-Kurzinfo:
+- Zweck: Definiert alle Parameter in einem dataclass-Objekt.
+- Inputs: Numerische Annahmen zu Anlagen, Preisen, CO2 und Dispatch.
+- Outputs: Valides SystemConfig inkl. abgeleiteter H2-Kapazität.
+- Typische Änderungen: Szenarioparameter, Grenzen, physikalische Annahmen.
 """
 
 from dataclasses import dataclass

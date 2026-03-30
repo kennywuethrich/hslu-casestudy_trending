@@ -1,5 +1,18 @@
 """
-Komponenten-Modul: H2-Speicher, Elektrolyseur, Brennstoffzelle, Wärmepumpe.
+Komponentenmodelle für Speicher, Umwandlung und Wärmepumpe.
+
+Entwickler-Kurzinfo:
+- Zweck: Kapselt das Verhalten einzelner physischer Komponenten.
+- Inputs: SystemConfig und Zeitschritt-spezifische Leistungsanforderungen.
+- Outputs: Leistung, Energieflüsse, SOC-Updates und Wärmeerzeugung.
+- Typische Änderungen: Wirkungsgrade, Teilastgrenzen, Speichergrenzen.
+
+Abkürzungen:
+- H2: Wasserstoff
+- SOC: State of Charge (Ladezustand)
+- ELY: Elektrolyseur
+- FC: Fuel Cell / Brennstoffzelle
+- COP: Coefficient of Performance (Leistungszahl der Wärmepumpe)
 """
 
 from typing import Dict
@@ -16,8 +29,6 @@ class H2Storage:
         self.capacity = config.h2_capacity_kwh
         self.soc_kwh = config.h2_initial_soc * self.capacity
         self.min_soc_kwh = config.h2_min_soc * self.capacity
-        self._charge_history = []
-        self._discharge_history = []
 
     @property
     def soc_pct(self) -> float:
@@ -44,7 +55,6 @@ class H2Storage:
         space = self.available_capacity
         actual = min(energy_kwh, space)
         self.soc_kwh += actual
-        self._charge_history.append(actual)
         return actual
 
     def discharge(self, energy_kwh: float) -> float:
@@ -57,14 +67,11 @@ class H2Storage:
         available = self.available_discharge
         actual = min(energy_kwh, available)
         self.soc_kwh -= actual
-        self._discharge_history.append(actual)
         return actual
 
     def reset(self, config: SystemConfig):
         """Setzt Speicher auf Anfangszustand zurück."""
         self.soc_kwh = config.h2_initial_soc * self.capacity
-        self._charge_history = []
-        self._discharge_history = []
 
     def __repr__(self):
         return f"H2Storage(SOC={self.soc_pct:.1f}%, Capacity={self.capacity}kWh)"
@@ -98,7 +105,7 @@ class ThermalStorage:
 
 class Electrolyzer:
     """
-    Elektrolyseur: Wandelt Strom in H2 (chemische Energie) + Abwärme.
+    Elektrolyseur (ELY): Wandelt Strom in H2 (chemische Energie) + Abwärme.
     Minimale Teillast: 10% der Nennleistung (realistisch für PEM-ELY).
     """
     
@@ -107,7 +114,6 @@ class Electrolyzer:
         self.p_min = 0.1 * config.ely_kw_max  # 10% Mindestlast
         self.eff_el = config.ely_eff_el      # Strom → H2 Effizienz
         self.eff_th = config.ely_eff_th      # Strom → Abwärme Effizienz
-        self._runtime_history = []
 
     def run(self, power_available: float, dt_h: float = 1.0) -> Dict[str, float]:
         """
@@ -128,8 +134,6 @@ class Electrolyzer:
         h2_produced = power_used * self.eff_el * dt_h
         heat_produced = power_used * self.eff_th * dt_h
         
-        self._runtime_history.append(power_used)
-        
         return {
             'power_used': power_used,
             'h2_produced': h2_produced,
@@ -143,7 +147,7 @@ class Electrolyzer:
 
 class FuelCell:
     """
-    Brennstoffzelle: Wandelt H2 in Strom + Abwärme.
+    Brennstoffzelle (FC): Wandelt H2 in Strom + Abwärme.
     Minimale Teillast: 10% der Nennleistung.
     """
     
@@ -152,7 +156,6 @@ class FuelCell:
         self.p_min = 0.1 * config.fc_kw_max
         self.eff_el = config.fc_eff_el      # H2 → Strom Effizienz
         self.eff_th = config.fc_eff_th      # H2 → Abwärme Effizienz
-        self._runtime_history = []
 
     def run(self, power_needed: float, h2_available: float, dt_h: float = 1.0) -> Dict[str, float]:
         """
@@ -177,7 +180,6 @@ class FuelCell:
             return {'power_out': 0.0, 'h2_used': 0.0, 'heat_produced': 0.0}
 
         heat_produced = h2_used * self.eff_th
-        self._runtime_history.append(power_out)
         
         return {
             'power_out': power_out,
@@ -192,14 +194,13 @@ class FuelCell:
 
 class HeatPump:
     """
-    Wärmepumpe mit konstantem Leistungszahl (COP).
+    Wärmepumpe mit konstanter Leistungszahl (COP).
     Deckt Wärmebedarf durch elektrische Leistung.
     """
     
     def __init__(self, config: SystemConfig):
         self.cop = config.hp_cop
         self.p_th_max = config.hp_kw_th_max
-        self._runtime_history = []
 
     def __repr__(self):
         return f"HeatPump(COP={self.cop}, P_th_max={self.p_th_max}kW)"

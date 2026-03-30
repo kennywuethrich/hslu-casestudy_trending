@@ -1,10 +1,17 @@
 """
-Simulator-Modul: Koordiniert die gesamte H2-Microgrid Simulation.
+Orchestrierungsschicht für die H2-Microgrid Simulation.
+
+Entwickler-Kurzinfo:
+- Zweck: Verbindet Profile, Strategien, KPI-Auswertung und Reporting.
+- Inputs: Scenario (Config + Profile-Modus), optionale Profile.
+- Outputs: Ergebniscontainer pro Strategie und Export-Trigger.
+- Typische Änderungen: Ablaufreihenfolge oder Integrationsschnittstellen.
 """
 
-import pandas as pd
 import os
-from typing import List, Dict, Tuple
+import pandas as pd
+from typing import Dict, List, Tuple
+
 from profiles import ProfileGenerator
 from strategies import Strategy, HeuristicStrategy, PriceBasedStrategy
 from analyzer import ResultAnalyzer
@@ -27,7 +34,7 @@ class Simulator:
         Initialisiert Simulator mit Szenario.
         
         Args:
-            scenario: Scenario Objekt mit Config und EV-Mode
+            scenario: Scenario Objekt mit Config
         """
         self.scenario = scenario
         self.config = scenario.config
@@ -39,12 +46,6 @@ class Simulator:
         
         print(f"\n✓ Simulator initialisiert für: {scenario.name}")
 
-    def _resolve_output_path(self, filepath: str) -> str:
-        """Löst relative Dateinamen standardmäßig in den results-Ordner auf."""
-        if os.path.isabs(filepath) or os.path.dirname(filepath):
-            return filepath
-        return os.path.join(self.output_dir, filepath)
-    
     def generate_profiles(self, hours: int = 8760) -> pd.DataFrame:
         """
         Lädt Energieprofile aus CSV gemäß zentraler Konfiguration.
@@ -59,7 +60,10 @@ class Simulator:
 
         mode = self.config.time_resolution
         print(f"  Lade Profile aus CSV (Auflösung: {mode})...")
-        profiles = self.profile_generator.load_simulation_profiles(self.config)
+        profiles = self.profile_generator.load_simulation_profiles(
+            self.config,
+            ev_profile_mode=self.scenario.ev_profile_mode,
+        )
         print(f"  ✓ Profile geladen ({len(profiles)} Zeitschritte)")
         return profiles
     
@@ -136,44 +140,36 @@ class Simulator:
         if not self.results:
             print("⚠ Keine Simulationsergebnisse vorhanden!")
             return
-        
-        print("\n" + "="*80)
+
+        print("\n" + "=" * 80)
         print(f"SIMULATIONSERGEBNISSE: {self.scenario.name}")
-        print("="*80)
-        
+        print("=" * 80)
+
         for strategy_key, result in self.results.items():
             kpis = result['kpis']
-            print(f"\n{'─'*80}")
+            print(f"\n{'─' * 80}")
             print(f"  Strategie: {strategy_key}")
-            print(f"{'─'*80}")
-            
+            print(f"{'─' * 80}")
+
             for key, value in kpis.items():
                 if key != 'label':
                     print(f"    {key:<35} {value:>15}")
-        
-        # KPI-Tabelle
+
         self.analyzer.print_kpi_table(self.get_kpis_summary())
-        
-        # Plots
+
         if include_plots:
-            self._create_plots()
-    
-    def _create_plots(self):
-        """Erstellt Visualisierungen."""
-        print("\nErstelle Visualisierungen...")
-        
-        for strategy_key, result in self.results.items():
-            result_df = result['result_df']
+            print("\nErstelle Visualisierungen...")
 
-            # Jahres-/Saisonverlauf H2-SOC
-            title = f"{self.scenario.name} – {strategy_key} – H2-SOC Jahresverlauf"
-            save_path = f"h2_soc_jahr_{strategy_key.lower()}.png"
-            self.analyzer.plot_h2_soc_year(result_df, title=title, save_path=save_path)
+            for strategy_key, result in self.results.items():
+                result_df = result['result_df']
 
-            # Übersichtliche Jahresbilanz der wichtigsten Energieströme
-            title = f"{self.scenario.name} – {strategy_key} – Jahresübersicht Energieströme"
-            save_path = f"jahresuebersicht_{strategy_key.lower()}.png"
-            self.analyzer.plot_year_energy_overview(result_df, title=title, save_path=save_path)
+                title_soc = f"{self.scenario.name} – {strategy_key} – H2-SOC Jahresverlauf"
+                save_path_soc = f"h2_soc_jahr_{strategy_key.lower()}.png"
+                self.analyzer.plot_h2_soc_year(result_df, title=title_soc, save_path=save_path_soc)
+
+                title_overview = f"{self.scenario.name} – {strategy_key} – Jahresübersicht Energieströme"
+                save_path_overview = f"jahresübersicht_{strategy_key.lower()}.png"
+                self.analyzer.plot_year_energy_overview(result_df, title=title_overview, save_path=save_path_overview)
     
     def export_results(self, csv_filepath: str = "simulationsergebnisse.csv"):
         """
@@ -192,10 +188,14 @@ class Simulator:
             filename = f"{stem}_{strategy_key}{ext}"
             result_df.to_csv(filename, index=False)
             print(f"  ✓ Exportiert: {filename}")
-        
-        # KPIs zu CSV
-        kpis_list = self.get_kpis_summary()
-        self.analyzer.save_kpis_to_csv(kpis_list)
+
+        self.analyzer.save_kpis_to_csv(self.get_kpis_summary())
+
+    def _resolve_output_path(self, filepath: str) -> str:
+        """Löst relative Dateinamen standardmäßig in den results-Ordner auf."""
+        if os.path.isabs(filepath) or os.path.dirname(filepath):
+            return filepath
+        return os.path.join(self.output_dir, filepath)
     
     def __repr__(self):
         return f"Simulator(Scenario: {self.scenario.name}, Strategies: {len(self.results)})"

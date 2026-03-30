@@ -1,4 +1,12 @@
-"""Betriebsstrategien: nur Policy, Dispatch kommt aus dispatch.py."""
+"""
+Strategiemodul mit reinen Entscheidungsregeln.
+
+Entwickler-Kurzinfo:
+- Zweck: Definiert, wann die Brennstoffzelle eingesetzt werden darf.
+- Inputs: Preis, Defizit, SOC, Saisoninformation.
+- Outputs: should_use_fc-Entscheidung je Zeitschritt.
+- Typische Änderungen: Regelwerte oder neue Strategieklassen.
+"""
 
 from abc import ABC, abstractmethod
 import pandas as pd

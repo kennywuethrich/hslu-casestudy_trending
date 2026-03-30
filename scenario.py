@@ -1,5 +1,11 @@
 """
-Szenario-Modul: Definition und Verwaltung von Simulationsszenarien.
+Szenariodefinitionen für wiederholbare Modellläufe.
+
+Entwickler-Kurzinfo:
+- Zweck: Verwaltet vordefinierte und benutzerdefinierte Szenarien.
+- Inputs: SystemConfig, ev_profile_mode und Beschreibung.
+- Outputs: Scenario-Objekte für den Simulator.
+- Typische Änderungen: Neue Szenarien oder geänderte Parameterwerte.
 """
 
 from dataclasses import dataclass
@@ -15,17 +21,17 @@ class Scenario:
     Attributes:
         name: Szenarioname
         config: Systemkonfiguration
-        ev_mode: E-Auto Lademodus
+        ev_profile_mode: Modus zur EV-Profilaufbereitung
         description: Ausführliche Beschreibung
     """
     
     name: str
     config: SystemConfig
-    ev_mode: Literal['evening', 'daytime', 'workplace'] = 'evening'
+    ev_profile_mode: Literal['as_is', 'daytime'] = 'as_is'
     description: str = ""
     
     def __repr__(self):
-        return f"Scenario('{self.name}', EV-Mode: {self.ev_mode})"
+        return f"Scenario('{self.name}')"
 
 
 # Vordefinierte Standard-Szenarien
@@ -36,7 +42,7 @@ SCENARIOS_LIBRARY = {
             price_buy_chf=0.28,
             price_sell_chf=0.10,
         ),
-        ev_mode='evening',
+        ev_profile_mode='as_is',
         description="Moderate Strompreise, E-Auto lädt abends (18-22 Uhr)"
     ),
     
@@ -47,7 +53,7 @@ SCENARIOS_LIBRARY = {
             price_sell_chf=0.16,
             price_threshold_fc=0.35,
         ),
-        ev_mode='evening',
+        ev_profile_mode='as_is',
         description="Erhöhte Strompreise und bessere Einspeisevergütung"
     ),
     
@@ -57,7 +63,7 @@ SCENARIOS_LIBRARY = {
             price_buy_chf=0.28,
             price_sell_chf=0.10,
         ),
-        ev_mode='daytime',
+        ev_profile_mode='daytime',
         description="E-Auto lädt tagsüber am Arbeitsplatz (PV-optimiert)"
     ),
 }
@@ -100,7 +106,7 @@ class ScenarioManager:
     
     @staticmethod
     def create_custom(name: str, config: SystemConfig, 
-                     ev_mode: str = 'evening',
+                     ev_profile_mode: str = 'as_is',
                      description: str = "") -> Scenario:
         """
         Erstellt custom Szenario.
@@ -108,7 +114,7 @@ class ScenarioManager:
         Args:
             name: Szenarioname
             config: SystemConfig Objekt
-            ev_mode: E-Auto Lademodus
+            ev_profile_mode: 'as_is' oder 'daytime'
             description: Optionale Beschreibung
             
         Returns:
@@ -117,7 +123,7 @@ class ScenarioManager:
         return Scenario(
             name=name,
             config=config,
-            ev_mode=ev_mode,
+            ev_profile_mode=ev_profile_mode,
             description=description
         )
     
@@ -130,7 +136,7 @@ class ScenarioManager:
         
         for key, scenario in SCENARIOS_LIBRARY.items():
             print(f"\n  {key}: {scenario.name}")
-            print(f"    EV-Mode: {scenario.ev_mode}")
+            print(f"    EV-Profilmodus: {scenario.ev_profile_mode}")
             print(f"    Preis Kauf: {scenario.config.price_buy_chf} CHF/kWh")
             print(f"    Preis Verkauf: {scenario.config.price_sell_chf} CHF/kWh")
             if scenario.description:

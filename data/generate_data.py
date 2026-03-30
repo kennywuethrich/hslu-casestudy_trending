@@ -2,6 +2,12 @@
 Wohnüberbauung Anna-Heer-Strasse Zürich - Zeitreihen-Generator
 Generiert simulationsfertige 1h- und 15min-CSV-Dateien.
 
+Entwickler-Kurzinfo:
+- Zweck: Erzeugt reproduzierbare Eingangsdaten fuer Simulationen.
+- Inputs: Jahreskonstanten, Gebaeudeannahmen und EV-Modus.
+- Outputs: CSV-Dateien mit pv_kw, load_el_kw, load_heat_kw, ev_demand_kw.
+- Typische Aenderungen: Lastmodell, Wetterannahmen, EV-Verteilung, Dateinamen.
+
 Enthält alle zeitabhängigen physikalischen Profile:
 - PV-Leistung [kW]
 - Elektrische Last [kW]

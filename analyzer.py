@@ -1,5 +1,11 @@
 """
-Analyzer-Modul: KPI-Berechnung, Auswertung und Visualisierung.
+Auswertungsmodul für KPI-Berechnung und Visualisierung.
+
+Entwickler-Kurzinfo:
+- Zweck: Verdichtet Zeitschrittresultate in Jahreskennzahlen und Plots.
+- Inputs: result_df aus der Simulation und SystemConfig.
+- Outputs: KPI-Dictionaries, Vergleichsplots und Exportdaten.
+- Typische Änderungen: KPI-Formeln, Plotlayout, Vergleichsmetriken.
 """
 
 import pandas as pd
@@ -40,28 +46,27 @@ class ResultAnalyzer:
         Returns:
             dict: Dictionary mit allen KPIs
         """
-        dt_h = result_df['dt_h'] if 'dt_h' in result_df.columns else pd.Series(1.0, index=result_df.index)
+        timestep_hours = result_df['dt_h'] if 'dt_h' in result_df.columns else pd.Series(1.0, index=result_df.index)
+        ev_power_column = 'ev_charge_kw' if 'ev_charge_kw' in result_df.columns else 'ev_demand_kw'
 
-        ev_el_col = 'ev_charge_kw' if 'ev_charge_kw' in result_df.columns else 'ev_demand_kw'
-
-        total_import = (result_df['grid_import_kw'] * dt_h).sum()
-        total_export = (result_df['grid_export_kw'] * dt_h).sum()
+        total_import = (result_df['grid_import_kw'] * timestep_hours).sum()
+        total_export = (result_df['grid_export_kw'] * timestep_hours).sum()
         
         # Gesamtlast
-        total_el_load = ((result_df['load_el_kw'] + result_df[ev_el_col]) * dt_h).sum()
-        total_heat_load_el = ((result_df['load_heat_kw'] / self.config.hp_cop) * dt_h).sum()
+        total_el_load = ((result_df['load_el_kw'] + result_df[ev_power_column]) * timestep_hours).sum()
+        total_heat_load_el = ((result_df['load_heat_kw'] / self.config.hp_cop) * timestep_hours).sum()
         total_load_el_equiv = total_el_load + total_heat_load_el
         
         # Autarkiegrad
         autarky = max(0.0, 1.0 - (total_import / total_load_el_equiv))
         
         # Energiekosten
-        costs_import = (result_df['grid_import_kw'] * result_df['price_buy'] * dt_h).sum()
-        costs_export = (result_df['grid_export_kw'] * result_df['price_sell'] * dt_h).sum()
+        costs_import = (result_df['grid_import_kw'] * result_df['price_buy'] * timestep_hours).sum()
+        costs_export = (result_df['grid_export_kw'] * result_df['price_sell'] * timestep_hours).sum()
         net_costs = costs_import - costs_export
         
         # CO2-Emissionen
-        co2_kg = (result_df['grid_import_kw'] * result_df['co2_intensity'] * dt_h).sum()
+        co2_kg = (result_df['grid_import_kw'] * result_df['co2_intensity'] * timestep_hours).sum()
         co2_t = co2_kg / 1000.0
         
         # Referenzfall (alles aus Netz)
@@ -84,8 +89,8 @@ class ResultAnalyzer:
             'MAC [CHF/tCO2]': round(mac, 1),
             'Referenz CO2 [tCO2/a]': round(ref_co2_t, 2),
             'CO2-Einsparung [tCO2/a]': round(delta_co2, 2),
-            'PV-Erzeugung [kWh]': round((result_df['pv_kw'] * dt_h).sum(), 0),
-            'H2-Erzeugung [kWh]': round((result_df['ely_power_kw'] * self.config.ely_eff_el * dt_h).sum(), 0),
+            'PV-Erzeugung [kWh]': round((result_df['pv_kw'] * timestep_hours).sum(), 0),
+            'H2-Erzeugung [kWh]': round((result_df['ely_power_kw'] * self.config.ely_eff_el * timestep_hours).sum(), 0),
         }
 
     def _build_time_index(self, result_df: pd.DataFrame) -> pd.DatetimeIndex:
@@ -119,11 +124,12 @@ class ResultAnalyzer:
         ax.axhline(5, color='red', ls='--', lw=1, label='Min SOC')
 
         # Saisonfenster zur Orientierung
+        ax.axvspan(pd.Timestamp('2026-01-01'), pd.Timestamp('2026-02-28'), color='#f2dede', alpha=0.25)
         ax.axvspan(pd.Timestamp('2026-03-01'), pd.Timestamp('2026-05-31'), color='#dff0d8', alpha=0.25)
         ax.axvspan(pd.Timestamp('2026-06-01'), pd.Timestamp('2026-08-31'), color='#fcf8e3', alpha=0.25)
         ax.axvspan(pd.Timestamp('2026-09-01'), pd.Timestamp('2026-11-30'), color='#d9edf7', alpha=0.25)
         ax.axvspan(pd.Timestamp('2026-12-01'), pd.Timestamp('2026-12-31'), color='#f2dede', alpha=0.25)
-        ax.axvspan(pd.Timestamp('2026-01-01'), pd.Timestamp('2026-02-28'), color='#f2dede', alpha=0.25)
+
 
         ax.set_title(title, fontweight='bold')
         ax.set_ylabel('H2-SOC [%]')
