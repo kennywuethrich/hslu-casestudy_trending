@@ -100,10 +100,11 @@ compare_all_scenarios()
 ```
 
 ## Szenarien
+>[!Tip] Szenarien
+> - **A_reference**: Baseline.
+> - **B_high_price**: höherer Strompreis, bessere Einspeisevergütung.
+> - **C_workplace**: EV-Profil wird je Tag in das Fenster 08:00-17:00 umgelegt.
 
-- A_reference: Baseline.
-- B_high_price: höherer Strompreis, bessere Einspeisevergütung.
-- C_workplace: EV-Profil wird je Tag in das Fenster 08:00-17:00 umgelegt.
 
 Hinweis: EV-Lastverlauf kommt derzeit direkt aus der gewählten CSV-Datei.
 Im Modus daytime wird nur die zeitliche Verteilung pro Tag verschoben; die Tagesenergie bleibt gleich.
