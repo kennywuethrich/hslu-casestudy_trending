@@ -28,8 +28,8 @@ venv/
 ENV/
 env/
 .venv
-Pipfile.lock
 Pipfile
+Pipfile.lock
 
 # IDE
 .vscode/
@@ -39,6 +39,7 @@ Pipfile
 *~
 .DS_Store
 .venv
+
 
 # Jupyter Notebook
 .ipynb_checkpoints
