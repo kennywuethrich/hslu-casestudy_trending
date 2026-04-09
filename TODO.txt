@@ -7,7 +7,7 @@ Szenario: defnieren []
 
 
 strategy: heurastic mit casadi ersetzen [Kenny]
-
+GUI erstellen [Kenny]
 readme: updaten
 
 allgemein: Klassendiagramm [Anna]
