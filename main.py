@@ -150,10 +150,10 @@ if __name__ == "__main__":
     # Wähle eine dieser Optionen:
     
     # Option 1: Interaktiver Modus
-    # main()
+    main()
     
     # Option 2: Direktes Szenario ausführen
     # run_scenario('A_reference')
     
     # Option 3: Alle Szenarien vergleichen
-    compare_all_scenarios()
+    # compare_all_scenarios()

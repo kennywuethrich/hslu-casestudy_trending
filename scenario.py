@@ -34,6 +34,10 @@ class Scenario:
         return f"Scenario('{self.name}')"
 
 
+
+#TODO Szenarien definiern!!!!!!!!! 
+
+
 # Vordefinierte Standard-Szenarien
 SCENARIOS_LIBRARY = {
     'A_reference': Scenario(
