@@ -15,6 +15,8 @@ from config import SystemConfig
 from components import H2Storage
 from dispatch import run_dispatch
 
+#TODO Strategien mit do_mpc und casadi
+
 
 class Strategy(ABC):
     """
