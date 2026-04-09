@@ -1,0 +1,20 @@
+TODO 
+config: überprüfen der Daten (Dtaenblätter teams) [Felix]
+
+allgemein: wiso 35 % auslastung in H2 [Nick]
+
+Szenario: defnieren []
+
+
+strategy: heurastic mit casadi ersetzen [Kenny]
+
+readme: updaten
+
+allgemein: Klassendiagramm [Anna]
+
+Szenario: Drop Down GUI mit 
+Anz autos
+Ausfall wärmepumpe
+Smart energie nutzung
+Strompreis  (Nachtraiffe)
+Wirkungsgrad änderung 
