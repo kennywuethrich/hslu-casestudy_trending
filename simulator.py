@@ -1,4 +1,3 @@
-#TODO H2 nur 35 % ???
 """
 Orchestrierungsschicht für die H2-Microgrid Simulation.
 
@@ -116,7 +115,7 @@ class Simulator:
         
         strategies = [
             HeuristicStrategy(self.config),
-            PriceBasedStrategy(self.config)
+            PriceBasedStrategy(self.config),
         ]
         
         for strategy in strategies:

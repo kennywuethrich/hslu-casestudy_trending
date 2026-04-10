@@ -1,12 +1,4 @@
-"""
-CSV-Import und Profilaufbereitung für die Simulation.
-
-Entwickler-Kurzinfo:
-- Zweck: Liest Profil-CSV und normalisiert Spalten für den Modellkern.
-- Inputs: SystemConfig (Datei, Auflösung) und ev_profile_mode.
-- Outputs: DataFrame mit Lasten, Preisen, CO2 und dt_h.
-- Typische Änderungen: Datenschema, Zeitindex, EV-Remapping.
-"""
+"""CSV-Import und Profilaufbereitung für die Simulation."""
 
 import pandas as pd
 import os
@@ -14,9 +6,7 @@ from config import SystemConfig
 
 
 class ProfileGenerator:
-    """
-    Lädt Energielastprofile für die Simulation aus CSV.
-    """
+    """Lädt die Eingangsprofile aus CSV."""
 
     REQUIRED_BASE_COLUMNS = [
         'datetime',
@@ -28,7 +18,6 @@ class ProfileGenerator:
 
     @staticmethod
     def _resolve_csv_path(config: SystemConfig) -> str:
-        """Ermittelt anhand der zentralen Auflösungswahl die passende CSV-Datei."""
         if config.time_resolution == '1h':
             filename = config.data_csv_1h
         elif config.time_resolution == '15min':
@@ -41,7 +30,6 @@ class ProfileGenerator:
 
     @staticmethod
     def _remap_ev_profile_to_daytime(ev_kw: pd.Series, dt_h: float) -> pd.Series:
-        """Verschiebt EV-Energie je Kalendertag in ein Workplace-Fenster (08:00-17:00)."""
         if ev_kw.empty:
             return ev_kw
 
@@ -74,9 +62,6 @@ class ProfileGenerator:
 
     @staticmethod
     def load_simulation_profiles(config: SystemConfig, ev_profile_mode: str = 'as_is') -> pd.DataFrame:
-        """
-        Lädt simulierte CSV-Profile und ergänzt konfigurationsabhängige Felder.
-        """
         filepath = ProfileGenerator._resolve_csv_path(config)
         if not os.path.exists(filepath):
             raise FileNotFoundError(

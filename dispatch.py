@@ -1,12 +1,4 @@
-"""
-Zentraler Bilanzkern für elektrische und thermische Dispatch-Logik.
-
-Entwickler-Kurzinfo:
-- Zweck: Rechnet je Zeitschritt die physikalische Energiebilanz.
-- Inputs: Profilzeile, Komponenteninstanzen, should_use_fc Callback.
-- Outputs: Netzfluss, Komponentenleistung, Speicherstände, Wärmebeitrag.
-- Typische Änderungen: Prioritäten, Bilanzregeln, Leistungsbegrenzungen.
-"""
+"""Physische Energie- und Wärmebilanz pro Zeitschritt."""
 
 from typing import Callable, Dict, Tuple
 import pandas as pd
@@ -24,7 +16,6 @@ def _run_electrolyzer(
     electrolyzer: Electrolyzer,
     hydrogen_storage: H2Storage,
 ) -> Tuple[float, float, float]:
-    """Wandelt elektrischen Ueberschuss in H2 um und liefert Rest-Export."""
     electrolyzer_result = electrolyzer.run(available_power_kw, dt_h=dt_h)
     electrolyzer_power_kw = electrolyzer_result['power_used']
     hydrogen_produced_kwh = electrolyzer_result['h2_produced']
@@ -51,7 +42,6 @@ def _run_fuel_cell(
     fuel_cell: FuelCell,
     should_use_fc: ShouldUseFC,
 ) -> Tuple[float, float, float]:
-    """Deckt ein Defizit mit Brennstoffzelle, falls durch Strategie erlaubt."""
     if shortage_kw <= 0:
         return 0.0, 0.0, 0.0
 
@@ -92,7 +82,6 @@ def _compute_heat_balance(
     fuel_cell: FuelCell,
     should_use_fc: ShouldUseFC,
 ) -> Tuple[float, float, float, float, float, float, float]:
-    """Bilanziert den thermischen Pfad und korrigiert die elektrische Bilanz."""
     direct_heat_kwh = heat_from_electrolyzer_kwh + heat_from_fuel_cell_kwh + heat_from_extra_heat_pump_kwh
 
     if direct_heat_kwh > load_heat_kwh:
@@ -162,7 +151,6 @@ def _dispatch_step(
     heat_pump: HeatPump,
     should_use_fc: ShouldUseFC,
 ) -> Dict[str, float]:
-    """Führt die Energiebilanz für einen Zeitschritt aus."""
     dt_h = row['dt_h'] if 'dt_h' in row else 1.0
     pv_power_kw = row['pv_kw']
     market_price = row['price_buy']

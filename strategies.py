@@ -15,7 +15,13 @@ from config import SystemConfig
 from components import H2Storage
 from dispatch import run_dispatch
 
-#TODO Strategien mit do_mpc und casadi
+
+def _reserve_target(config: SystemConfig) -> float:
+    return max(config.fc_reserve_soc_target, config.h2_min_soc)
+
+
+def _h2_available(h2: H2Storage) -> bool:
+    return h2.available_discharge > 0
 
 
 class Strategy(ABC):
@@ -64,17 +70,12 @@ class HeuristicStrategy(Strategy):
         return run_dispatch(profile_df, self.config, self._should_use_fc)
 
     def _should_use_fc(self, price: float, shortage_kw: float, h2: H2Storage, day_of_year: int) -> bool:
-        """
-        FC-Einsatz für Heuristik:
-        - oberhalb Reserve-Ziel ist FC grundsätzlich erlaubt,
-        - darunter nur bei größeren Defiziten (Peak-Shaving).
-        """
         del price, day_of_year
-        if h2.available_discharge <= 0:
+        if not _h2_available(h2):
             return False
 
         soc_pct = h2.soc_kwh / h2.capacity if h2.capacity > 0 else 0.0
-        reserve_target = max(self.config.fc_reserve_soc_target, self.config.h2_min_soc)
+        reserve_target = _reserve_target(self.config)
 
         if soc_pct > reserve_target:
             return True
@@ -98,19 +99,14 @@ class PriceBasedStrategy(Strategy):
         return run_dispatch(profile_df, self.config, self._should_use_fc)
 
     def _should_use_fc(self, price: float, shortage_kw: float, h2: H2Storage, day_of_year: int) -> bool:
-        """
-        Aktiviert die Brennstoffzelle bei Defizit
-        - wirtschaftlich (hoher Preis),
-        - oder zur Eigenverbrauchserhöhung im Sommer bei gutem SOC,
-        - oder für Peak-Shaving.
-        """
-        if h2.available_discharge <= 0:
+        if not _h2_available(h2):
             return False
 
         soc_pct = h2.soc_kwh / h2.capacity if h2.capacity > 0 else 0.0
-        reserve_target = max(self.config.fc_reserve_soc_target, self.config.h2_min_soc)
+        reserve_target = _reserve_target(self.config)
 
         is_summer = 121 <= int(day_of_year) <= 273
         summer_self_use = is_summer and soc_pct > reserve_target
 
         return summer_self_use or (price > self.config.price_threshold_fc) or (shortage_kw >= self.config.fc_peak_shaving_kw)
+

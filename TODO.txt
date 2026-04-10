@@ -6,8 +6,10 @@ allgemein: wiso 35 % auslastung in H2 [Nick]
 Szenario: defnieren []
 
 
-strategy: heurastic mit casadi ersetzen [Kenny]
+Strategy: heurastic mit casadi ersetzen [Kenny]
 GUI erstellen [Kenny]
+Output sinnvoller gestalten, mit Grafiken welche etwas aussagen
+
 readme: updaten
 
 allgemein: Klassendiagramm [Anna]
@@ -16,5 +18,5 @@ Szenario: Drop Down GUI mit
 Anz autos
 Ausfall wärmepumpe
 Smart energie nutzung
-Strompreis  (Nachtraiffe)
+Strompreis  (Nacht-tarife)
 Wirkungsgrad änderung 

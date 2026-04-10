@@ -1,12 +1,4 @@
-"""
-Auswertungsmodul für KPI-Berechnung und Visualisierung.
-
-Entwickler-Kurzinfo:
-- Zweck: Verdichtet Zeitschrittresultate in Jahreskennzahlen und Plots.
-- Inputs: result_df aus der Simulation und SystemConfig.
-- Outputs: KPI-Dictionaries, Vergleichsplots und Exportdaten.
-- Typische Änderungen: KPI-Formeln, Plotlayout, Vergleichsmetriken.
-"""
+"""KPI-Berechnung und Visualisierung für die Simulation."""
 
 import pandas as pd
 import numpy as np
@@ -52,24 +44,19 @@ class ResultAnalyzer:
         total_import = (result_df['grid_import_kw'] * timestep_hours).sum()
         total_export = (result_df['grid_export_kw'] * timestep_hours).sum()
         
-        # Gesamtlast
         total_el_load = ((result_df['load_el_kw'] + result_df[ev_power_column]) * timestep_hours).sum()
         total_heat_load_el = ((result_df['load_heat_kw'] / self.config.hp_cop) * timestep_hours).sum()
         total_load_el_equiv = total_el_load + total_heat_load_el
         
-        # Autarkiegrad
         autarky = max(0.0, 1.0 - (total_import / total_load_el_equiv))
         
-        # Energiekosten
         costs_import = (result_df['grid_import_kw'] * result_df['price_buy'] * timestep_hours).sum()
         costs_export = (result_df['grid_export_kw'] * result_df['price_sell'] * timestep_hours).sum()
         net_costs = costs_import - costs_export
         
-        # CO2-Emissionen
         co2_kg = (result_df['grid_import_kw'] * result_df['co2_intensity'] * timestep_hours).sum()
         co2_t = co2_kg / 1000.0
         
-        # Referenzfall (alles aus Netz)
         ref_import = total_load_el_equiv
         ref_costs = (ref_import * result_df['price_buy'].mean())
         ref_co2_t = (ref_import * result_df['co2_intensity'].mean()) / 1000.0
@@ -101,7 +88,7 @@ class ResultAnalyzer:
 
     def plot_h2_soc_year(self, result_df: pd.DataFrame, title: str = "H2-SOC Jahresverlauf",
                          save_path: str = None):
-        """Zeigt Jahres-/Saisondynamik des H2-SOC als Tages-Min/Max-Band plus Tagesmittel."""
+        """Zeigt den H2-SOC über das Jahr als Tagesband und Tagesmittel."""
         if 'h2_soc_kwh' not in result_df.columns or len(result_df) == 0:
             return
 
@@ -123,7 +110,6 @@ class ResultAnalyzer:
         ax.plot(daily_stats.index, daily_stats['mean'].values, color='darkgreen', lw=1.8, label='Tagesmittel H2-SOC')
         ax.axhline(5, color='red', ls='--', lw=1, label='Min SOC')
 
-        # Saisonfenster zur Orientierung
         ax.axvspan(pd.Timestamp('2026-01-01'), pd.Timestamp('2026-02-28'), color='#f2dede', alpha=0.25)
         ax.axvspan(pd.Timestamp('2026-03-01'), pd.Timestamp('2026-05-31'), color='#dff0d8', alpha=0.25)
         ax.axvspan(pd.Timestamp('2026-06-01'), pd.Timestamp('2026-08-31'), color='#fcf8e3', alpha=0.25)
@@ -161,13 +147,7 @@ class ResultAnalyzer:
     def plot_year_energy_overview(self, result_df: pd.DataFrame,
                                   title: str = "Jahresübersicht Energiebilanz",
                                   save_path: str = None):
-        """
-        Übersichtliche Jahresdarstellung mit Fokus auf:
-        - Netzbezug
-        - Netzeinspeisung
-        - Strom für H2-Umwandlung (ELY)
-        - Strom für EV-Ladung
-        """
+        """Zeigt die wichtigsten Jahresflüsse in einer kompakten Übersicht."""
         if len(result_df) == 0:
             return
 
@@ -193,7 +173,6 @@ class ResultAnalyzer:
         fig, axes = plt.subplots(3, 1, figsize=(14, 12), sharex=False)
         fig.suptitle(title, fontsize=14, fontweight='bold')
 
-        # 1) Monatssummen der angefragten vier Flüsse
         ax1 = axes[0]
         x = np.arange(len(monthly.index))
         w = 0.2
@@ -208,7 +187,6 @@ class ResultAnalyzer:
         ax1.grid(True, axis='y', alpha=0.3)
         ax1.legend(loc='upper right', fontsize=8)
 
-        # 2) Kontext: PV-Erzeugung vs. elektrische Nachfrage
         ax2 = axes[1]
         total_demand = monthly['load_el_kwh'] + monthly['hp_el_kwh'] + monthly['ev_charge_kwh']
         ax2.plot(monthly.index, monthly['pv_kwh'], lw=2.2, color='#e6ab02', label='PV-Erzeugung')
@@ -221,7 +199,6 @@ class ResultAnalyzer:
         ax2.grid(True, alpha=0.3)
         ax2.legend(loc='upper right', fontsize=8)
 
-        # 3) Kumulierte Jahresverläufe der Kernflüsse
         ax3 = axes[2]
         ax3.plot(cumulative.index, cumulative['grid_import_kwh'], color='#d95f02', lw=1.8, label='kumuliert Netzbezug')
         ax3.plot(cumulative.index, cumulative['grid_export_kwh'], color='#1b9e77', lw=1.8, label='kumuliert Einspeisung')
@@ -252,55 +229,7 @@ class ResultAnalyzer:
 
         plt.close(fig)
     
-    def plot_kpi_comparison(self, kpi_list: List[Dict], show: bool = False, 
-                           save_path: str = None):
-        """
-        Erstellt KPI-Vergleichsdiagramm.
-        
-        Args:
-            kpi_list: Liste von KPI-Dicts
-            save_path: Optional: Pfad zum Speichern
-        """
-        labels = [k['label'] for k in kpi_list]
-        metrics = ['Autarkiegrad [%]', 'Energiekosten [CHF/a]',
-                  'CO2-Emissionen [tCO2/a]', 'MAC [CHF/tCO2]']
-        
-        fig, axes = plt.subplots(2, 2, figsize=(14, 10))
-        fig.suptitle('KPI-Vergleich: Strategien & Szenarien', 
-                    fontsize=14, fontweight='bold')
-        colors = plt.cm.Set2(np.linspace(0, 1, len(labels)))
-        
-        for ax, metric in zip(axes.flatten(), metrics):
-            values = [k[metric] for k in kpi_list]
-            bars = ax.bar(labels, values, color=colors)
-            ax.set_title(metric, fontweight='bold')
-            ax.set_ylabel(metric)
-            ax.tick_params(axis='x', rotation=30)
-            
-            # Werte auf Balken
-            for bar, val in zip(bars, values):
-                ax.text(bar.get_x() + bar.get_width() / 2,
-                       bar.get_height() * 1.01,
-                       f'{val:,.0f}', ha='center', va='bottom', fontsize=8)
-            ax.grid(True, alpha=0.3, axis='y')
-        
-        plt.tight_layout()
-        
-        if save_path:
-            resolved_path = self._resolve_output_path(save_path)
-            plt.savefig(resolved_path, dpi=150)
-            print(f"  ✓ Gespeichert: {resolved_path}")
-        
-        # plt.show()
-        plt.close(fig)
-    
     def print_kpi_table(self, kpi_list: List[Dict]):
-        """
-        Gibt KPI-Tabelle formatiert aus.
-        
-        Args:
-            kpi_list: Liste von KPI-Dicts
-        """
         kpi_df = pd.DataFrame(kpi_list).set_index('label')
         print("\n" + "="*100)
         print("KPI-ÜBERSICHTSTABELLE")
@@ -310,13 +239,6 @@ class ResultAnalyzer:
     
     def save_kpis_to_csv(self, kpi_list: List[Dict], 
                         filepath: str = "kpi_ergebnisse.csv"):
-        """
-        Speichert KPIs in CSV-Datei.
-        
-        Args:
-            kpi_list: Liste von KPI-Dicts
-            filepath: Zieldatei
-        """
         resolved_path = self._resolve_output_path(filepath)
         kpi_df = pd.DataFrame(kpi_list)
         kpi_df.to_csv(resolved_path, index=False)
