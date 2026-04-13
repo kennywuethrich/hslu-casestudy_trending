@@ -191,9 +191,11 @@ class ResultAnalyzer:
         total_demand = monthly['load_el_kwh'] + monthly['hp_el_kwh'] + monthly['ev_charge_kwh']
         ax2.plot(monthly.index, monthly['pv_kwh'], lw=2.2, color='#e6ab02', label='PV-Erzeugung')
         ax2.plot(monthly.index, total_demand, lw=2.2, color='#333333', label='El. Nachfrage gesamt')
+        annual_surplus = (monthly['pv_kwh'] - total_demand).clip(lower=0).sum()
+        annual_surplus_pct = (annual_surplus / monthly['pv_kwh'].sum() * 100 if monthly['pv_kwh'].sum() > 0 else 0.0)
         ax2.fill_between(monthly.index, monthly['pv_kwh'].values, total_demand.values,
                          where=(monthly['pv_kwh'].values >= total_demand.values),
-                         color='#a6d854', alpha=0.25, interpolate=True, label='Monatlicher Überschuss')
+                         color='#a6d854', alpha=0.25, interpolate=True, label=f'Jährlicher Überschuss ({annual_surplus_pct:.1f}%)')
         ax2.set_ylabel('Energie [kWh/Monat]')
         ax2.set_title('PV vs. elektrische Gesamtnachfrage')
         ax2.grid(True, alpha=0.3)
