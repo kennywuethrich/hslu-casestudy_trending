@@ -29,7 +29,7 @@ class Simulator:
     - Visualisierung
     """
     
-    def __init__(self, scenario: Scenario):
+    def __init__(self, scenario: Scenario): #Konstruktor mit Szenario-Objekt
         """
         Initialisiert Simulator mit Szenario.
         
@@ -40,9 +40,9 @@ class Simulator:
         self.config = scenario.config
         self.profile_generator = ProfileGenerator()
         self.analyzer = ResultAnalyzer(self.config)
-        self.results = {}  # Speichert Ergebnisse aller Strategien
+        self.results = {}  
         self.output_dir = "results"
-        os.makedirs(self.output_dir, exist_ok=True)
+        os.makedirs(self.output_dir, exist_ok=True) #Erstellt Results Ordner, wenn nicht vorhanden ist
         
         print(f"\n✓ Simulator initialisiert für: {scenario.name}")
 
@@ -57,8 +57,9 @@ class Simulator:
             pd.DataFrame: Vollständige Energieprofile
         """
         del hours  # CSV-only Modus: Zeitschritte kommen vollständig aus Datendatei.
+        # --> hours wird gelöscht, weil in Fkt nicht gebraucht wird, komplett aus CSV geladen
 
-        mode = self.config.time_resolution
+        mode = self.config.time_resolution 
         print(f"  Lade Profile aus CSV (Auflösung: {mode})...")
         profiles = self.profile_generator.load_simulation_profiles(
             self.config,
