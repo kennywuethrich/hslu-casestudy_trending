@@ -15,18 +15,18 @@ class SystemConfig:
     data_csv_15min: str = 'data_anna-heer_15min.csv'
 
     # Leistungen [kW]
-    ely_kw_max: float = 33.0
-    fc_kw_max: float = 34.0
+    ely_kw_max: float = 33.0 # (Factsheet H2 S2)
+    fc_kw_max: float = 34.2 # (Factsheet H2 S2)
     hp_kw_th_max: float = 95.0
 
     # H2-Speicher
     h2_tank_volume_m3: float = 85.0
-    h2_pressure_bar: float = 30.0
+    h2_pressure_bar: float = 35.0           # (von 3.5 bis max 35 bar)
     h2_temperature_c: float = 15.0
-    h2_density_override_kg_m3: Optional[float] = None
-    h2_total_mass_override_kg: Optional[float] = None
+    h2_density_override_kg_m3: Optional[float] = 2.94 # (bei 35 bar und 15°C, sonst Berechnung über ideale Gasgleichung)
+    h2_total_mass_override_kg: Optional[float] = 250.0 # (bei 35 bar und 15°C)
     h2_lhv_kwh_per_kg: float = 33.33
-    h2_capacity_override_kwh: Optional[float] = None
+    h2_capacity_override_kwh: Optional[float] = 8325.5 # (Fachtsheet H2)
 
     h2_initial_soc: float = 0.05
     h2_min_soc: float = 0.05
@@ -36,19 +36,19 @@ class SystemConfig:
     thermal_initial_soc: float = 0.5
 
     # Wirkungsgrade
-    ely_eff_el: float = 0.65
+    ely_eff_el: float = 0.538
     ely_eff_th: float = 0.20
-    fc_eff_el: float = 0.50
-    fc_eff_th: float = 0.30
-    hp_cop: float = 3.5
+    fc_eff_el: float = 0.449
+    fc_eff_th: float = 0.508
+    hp_cop: float = 2.67 #(Netto COP mit H2 excel pilotprojekt)
 
-    # Preise und Regeln
+    # Preise und Regeln mit API?
     price_buy_chf: float = 0.28
     price_sell_chf: float = 0.10
     co2_grid_kg_kwh: float = 0.128
     price_threshold_fc: float = 0.30
     fc_reserve_soc_target: float = 0.35
-    fc_peak_shaving_kw: float = 35.0
+    fc_peak_shaving_kw: float = 37.4
     fc_dispatch_max_kw: float = 18.0
 
     _H2_MOLAR_MASS_KG_PER_MOL: ClassVar[float] = 0.00201588
