@@ -69,7 +69,7 @@ class Simulator:
         return profiles
     
     def run_strategy(self, strategy: Strategy, 
-                    profiles: pd.DataFrame = None) -> Tuple[pd.DataFrame, Dict]:
+                    profiles: pd.DataFrame = None) -> Tuple[pd.DataFrame, Dict]: #Optional profiles erzeugen, wenn nichts übergeben wird
         """
         Führt Betriebsstrategie aus.
         
@@ -81,7 +81,7 @@ class Simulator:
             tuple: (result_df, kpis_dict)
         """
         if profiles is None:
-            profiles = self.generate_profiles()
+            profiles = self.generate_profiles() #generiert profiles, wenn keine übergeben wurden
         
         print(f"  Führe Strategie aus: {strategy.name}...")
         result_df = strategy.run(profiles)
@@ -156,9 +156,9 @@ class Simulator:
                 if key != 'label':
                     print(f"    {key:<35} {value:>15}")
 
-        self.analyzer.print_kpi_table(self.get_kpis_summary())
+        self.analyzer.print_kpi_table(self.get_kpis_summary()) #gibt zusammenfassende KPI Tabelle für alle Strategien aus
 
-        if include_plots:
+        if include_plots: #erzeugt für jede Strategie zwei Diagramme (H2 Soc Jahresverlauf & Jahresübersicht Energieströme)
             print("\nErstelle Visualisierungen...")
 
             for strategy_key, result in self.results.items():
@@ -179,8 +179,8 @@ class Simulator:
         Args:
             csv_filepath: Zieldatei für CSV
         """
-        base_path = self._resolve_output_path(csv_filepath)
-        stem, ext = os.path.splitext(base_path)
+        base_path = self._resolve_output_path(csv_filepath) #sorgt dafür, dass relative Dateinamen im results Ordner landen
+        stem, ext = os.path.splitext(base_path) #trennt Basisname und Dateiendung
         if not ext:
             ext = ".csv"
 
