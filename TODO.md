@@ -1,4 +1,4 @@
-# TODO 
+# TODO Trending
 config: überprüfen der Daten (Datenblätter teams) [Felix] _erledigt_
 
 allgemein: wieso 35 % auslastung in H2 [Nick] 
