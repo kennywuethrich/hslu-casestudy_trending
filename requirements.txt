@@ -4,3 +4,4 @@ matplotlib>=3.4.0
 pvlib>=0.9.0
 do-mpc>=5.1.1
 casadi>=3.7.2
+customtkinter>=5.0.0
