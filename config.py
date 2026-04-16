@@ -44,7 +44,7 @@ class SystemConfig:
     fc_eff_th: float = 0.508
     hp_cop: float = 2.67 #(Netto COP mit H2 excel pilotprojekt)
 
-    # Preise und Regeln mit API?
+    # Preise und Regeln mit API? bei EKZ (Zürich)
     price_buy_chf: float = 0.28
     price_sell_chf: float = 0.10
     co2_grid_kg_kwh: float = 0.128
