@@ -23,7 +23,7 @@ Drop Down GUI mit
 ## 16.04.2026:
 
 - [ ] Strompreise als API (bei EKZ) [Felix]
-- [ ] 
+- [ ] Daten updaten. [Nick]
 
 ## 07.05.2026
 
