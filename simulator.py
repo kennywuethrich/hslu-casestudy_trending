@@ -29,7 +29,7 @@ class Simulator:
     - Visualisierung
     """
     
-    def __init__(self, scenario: Scenario):
+    def __init__(self, scenario: Scenario): #Konstruktor mit Szenario-Objekt
         """
         Initialisiert Simulator mit Szenario.
         
@@ -40,9 +40,9 @@ class Simulator:
         self.config = scenario.config
         self.profile_generator = ProfileGenerator()
         self.analyzer = ResultAnalyzer(self.config)
-        self.results = {}  # Speichert Ergebnisse aller Strategien
+        self.results = {}  
         self.output_dir = "results"
-        os.makedirs(self.output_dir, exist_ok=True)
+        os.makedirs(self.output_dir, exist_ok=True) #Erstellt Results Ordner, wenn nicht vorhanden ist
         
         print(f"\n✓ Simulator initialisiert für: {scenario.name}")
 
@@ -57,8 +57,9 @@ class Simulator:
             pd.DataFrame: Vollständige Energieprofile
         """
         del hours  # CSV-only Modus: Zeitschritte kommen vollständig aus Datendatei.
+        # --> hours wird gelöscht, weil in Fkt nicht gebraucht wird, komplett aus CSV geladen
 
-        mode = self.config.time_resolution
+        mode = self.config.time_resolution 
         print(f"  Lade Profile aus CSV (Auflösung: {mode})...")
         profiles = self.profile_generator.load_simulation_profiles(
             self.config,
@@ -68,7 +69,7 @@ class Simulator:
         return profiles
     
     def run_strategy(self, strategy: Strategy, 
-                    profiles: pd.DataFrame = None) -> Tuple[pd.DataFrame, Dict]:
+                    profiles: pd.DataFrame = None) -> Tuple[pd.DataFrame, Dict]: #Optional profiles erzeugen, wenn nichts übergeben wird
         """
         Führt Betriebsstrategie aus.
         
@@ -80,7 +81,7 @@ class Simulator:
             tuple: (result_df, kpis_dict)
         """
         if profiles is None:
-            profiles = self.generate_profiles()
+            profiles = self.generate_profiles() #generiert profiles, wenn keine übergeben wurden
         
         print(f"  Führe Strategie aus: {strategy.name}...")
         result_df = strategy.run(profiles)
@@ -155,9 +156,9 @@ class Simulator:
                 if key != 'label':
                     print(f"    {key:<35} {value:>15}")
 
-        self.analyzer.print_kpi_table(self.get_kpis_summary())
+        self.analyzer.print_kpi_table(self.get_kpis_summary()) #gibt zusammenfassende KPI Tabelle für alle Strategien aus
 
-        if include_plots:
+        if include_plots: #erzeugt für jede Strategie zwei Diagramme (H2 Soc Jahresverlauf & Jahresübersicht Energieströme)
             print("\nErstelle Visualisierungen...")
 
             for strategy_key, result in self.results.items():
@@ -178,8 +179,8 @@ class Simulator:
         Args:
             csv_filepath: Zieldatei für CSV
         """
-        base_path = self._resolve_output_path(csv_filepath)
-        stem, ext = os.path.splitext(base_path)
+        base_path = self._resolve_output_path(csv_filepath) #sorgt dafür, dass relative Dateinamen im results Ordner landen
+        stem, ext = os.path.splitext(base_path) #trennt Basisname und Dateiendung
         if not ext:
             ext = ".csv"
 

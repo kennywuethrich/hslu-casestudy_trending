@@ -57,3 +57,6 @@ alle_szenarien_kpi.csv
 # Generated outputs (keep folder, ignore contents)
 results/**
 !results/.gitkeep
+
+# Diagramme
+.drawio/
