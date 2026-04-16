@@ -18,18 +18,10 @@ class ProfileGenerator:
 
     @staticmethod
     def _resolve_csv_path(config: SystemConfig) -> str:
-        if config.time_resolution == '1h':
-            filename = config.data_csv_1h
-        elif config.time_resolution == '15min':
-            filename = config.data_csv_15min
-        else:
-            raise ValueError(
-                f"Ungültige time_resolution='{config.time_resolution}'. Erlaubt: '1h', '15min'."
-            )
-        return os.path.join(config.data_dir, filename)
+        return os.path.join(config.data_dir, config.data_csv)
 
     @staticmethod
-    def _remap_ev_profile_to_daytime(ev_kw: pd.Series, dt_h: float) -> pd.Series:
+    def _remap_ev_profile_to_daytime(ev_kw: pd.Series) -> pd.Series:
         if ev_kw.empty:
             return ev_kw
 
@@ -39,7 +31,7 @@ class ProfileGenerator:
         for day in day_keys.unique():
             day_mask = (day_keys == day)
             day_series = ev_kw[day_mask]
-            day_energy_kwh = float((day_series * dt_h).sum())
+            day_energy_kwh = float(day_series.sum())
 
             if day_energy_kwh <= 0:
                 continue
@@ -51,8 +43,7 @@ class ProfileGenerator:
                 result.loc[day_series.index] = day_series.values
                 continue
 
-            per_step_kwh = day_energy_kwh / int(daytime_mask.sum())
-            per_step_kw = per_step_kwh / dt_h if dt_h > 0 else 0.0
+            per_step_kw = day_energy_kwh / int(daytime_mask.sum())
 
             remapped = pd.Series(0.0, index=day_series.index)
             remapped.iloc[daytime_mask] = per_step_kw
@@ -81,20 +72,14 @@ class ProfileGenerator:
         df['datetime'] = df['datetime'].dt.tz_convert('Europe/Zurich')
         df = df.sort_values('datetime').set_index('datetime')
 
-        if len(df.index) > 1:
-            dt_h = (df.index[1] - df.index[0]).total_seconds() / 3600.0
-        else:
-            dt_h = 1.0
-
         ev_kw = df['ev_demand_kw'].astype(float)
         if ev_profile_mode == 'daytime':
-            ev_kw = ProfileGenerator._remap_ev_profile_to_daytime(ev_kw, dt_h)
+            ev_kw = ProfileGenerator._remap_ev_profile_to_daytime(ev_kw)
         elif ev_profile_mode != 'as_is':
             raise ValueError(f"Ungültiger ev_profile_mode='{ev_profile_mode}'. Erlaubt: 'as_is', 'daytime'.")
 
         timestamps = df.index
         out = pd.DataFrame({
-            'hour': range(len(df)),
             'hour_of_day': timestamps.hour,
             'day_of_year': timestamps.dayofyear - 1,
             'pv_kw': df['pv_kw'].to_numpy(),
@@ -104,7 +89,7 @@ class ProfileGenerator:
             'price_buy': config.price_buy_chf,
             'price_sell': config.price_sell_chf,
             'co2_intensity': config.co2_grid_kg_kwh,
-            'dt_h': dt_h,
+            'dt_h': 1.0,
         })
         return out
 

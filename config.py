@@ -9,10 +9,8 @@ class SystemConfig:
     """Alle Systemparameter an einem Ort."""
 
     # Daten
-    time_resolution: Literal['1h', '15min'] = '15min'
     data_dir: str = 'data'
-    data_csv_1h: str = 'data_anna-heer_1h.csv'
-    data_csv_15min: str = 'data_anna-heer_15min.csv'
+    data_csv: str = 'data_anna-heer_1h.csv'
 
     # Leistungen [kW]
     ely_kw_max: float = 33.0 # (Factsheet H2 S2)
@@ -57,8 +55,6 @@ class SystemConfig:
     _UNIVERSAL_GAS_CONSTANT_J_PER_MOLK: ClassVar[float] = 8.314462618
 
     def __post_init__(self):
-        if self.time_resolution not in ('1h', '15min'):
-            raise ValueError("time_resolution muss '1h' oder '15min' sein.")
         if self.h2_tank_volume_m3 <= 0:
             raise ValueError("h2_tank_volume_m3 muss > 0 sein.")
         if self.h2_pressure_bar <= 0:
@@ -110,15 +106,14 @@ class SystemConfig:
 
     @property
     def dt_h(self) -> float:
-        return 1.0 if self.time_resolution == '1h' else 0.25
+        return 1.0
 
     def horizon_steps(self, horizon_h: int) -> int:
-        return max(1, int(round(float(horizon_h) / self.dt_h)))
+        return max(1, int(round(float(horizon_h))))
 
     def __repr__(self):
         return (f"SystemConfig(ELY={self.ely_kw_max}kW, "
                 f"FC={self.fc_kw_max}kW, HP={self.hp_kw_th_max}kW, "
                 f"H2={self.h2_capacity_kwh:.1f}kWh, "
                 f"V={self.h2_tank_volume_m3}m3, p={self.h2_pressure_bar}bar, T={self.h2_temperature_c}C, "
-                f"Price Buy={self.price_buy_chf} CHF/kWh, "
-                f"Resolution={self.time_resolution})")
+                f"Price Buy={self.price_buy_chf} CHF/kWh)")
