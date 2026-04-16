@@ -151,98 +151,98 @@ def _dispatch_step(
     heat_pump: HeatPump,
     should_use_fc: ShouldUseFC,
 ) -> Dict[str, float]:
-    dt_h = row['dt_h'] if 'dt_h' in row else 1.0
-    pv_power_kw = row['pv_kw']
-    market_price = row['price_buy']
-    electric_load_kw = row['load_el_kw']
-    ev_home_charging_power_kw = max(0.0, row['ev_demand_kw'])
-    heat_load_kw = row['load_heat_kw']
-    heat_load_kwh = heat_load_kw * dt_h
-    day_of_year = int(row['day_of_year']) if 'day_of_year' in row else 0
-
-    base_heat_pump_power_kw = min(heat_load_kw / heat_pump.cop, config.hp_kw_th_max / heat_pump.cop)
-    total_electric_demand_kw = electric_load_kw + ev_home_charging_power_kw + base_heat_pump_power_kw
-    net_electric_balance_kw = pv_power_kw - total_electric_demand_kw
-
+    # Extract data
+    dt_h = row.get('dt_h', 1.0)
+    pv = row['pv_kw']
+    price = row['price_buy']
+    load_el = row['load_el_kw']
+    load_ev = max(0.0, row['ev_demand_kw'])
+    load_heat = row['load_heat_kw']
+    temp_c = row.get('outdoor_temp_c', 20.0)
+    day_of_year = int(row.get('day_of_year', 0))
+    
+    # HP only usable if outdoor_temp_c >= +5°C
+    hp_available = temp_c >= 5.0
+    
+    # Base heat pump (always needed, but only if temp ok)
+    if hp_available:
+        base_hp_kw = min(load_heat / heat_pump.cop, config.hp_kw_th_max / heat_pump.cop)
+    else:
+        base_hp_kw = 0.0
+        # If no HP available, we need grid heat (handled in heat_balance)
+    
+    total_demand_kw = load_el + load_ev + base_hp_kw
+    balance_kw = pv - total_demand_kw
+    
     grid_import = 0.0
     grid_export = 0.0
-    electrolyzer_power = 0.0
-    fuel_cell_power = 0.0
-    extra_heat_pump_power_kw = 0.0
-    heat_from_ely = 0.0
-    heat_from_fc = 0.0
-    heat_from_hp_extra = 0.0
+    ely_kw = 0.0
+    fc_kw = 0.0
+    extra_hp_kw = 0.0
+    heat_ely = 0.0
+    heat_fc = 0.0
+    heat_hp_extra = 0.0
 
-    if net_electric_balance_kw >= 0:
-        max_heat_pump_power_kw = config.hp_kw_th_max / heat_pump.cop
-        extra_heat_pump_power_kw = min(
-            net_electric_balance_kw,
-            max(0.0, max_heat_pump_power_kw - base_heat_pump_power_kw),
-        )
-        heat_from_hp_extra = extra_heat_pump_power_kw * heat_pump.cop * dt_h
-        remaining_surplus_kw = max(0.0, net_electric_balance_kw - extra_heat_pump_power_kw)
-
-        electrolyzer_power, heat_from_ely, grid_export = _run_electrolyzer(
-            remaining_surplus_kw,
-            dt_h,
-            electrolyzer,
-            hydrogen_storage,
+    if balance_kw >= 0:
+        # Surplus: Extra HP heating, then ELY, then grid export
+        if hp_available:
+            max_hp_extra = config.hp_kw_th_max / heat_pump.cop - base_hp_kw
+            extra_hp_kw = min(balance_kw, max(0.0, max_hp_extra))
+            heat_hp_extra = extra_hp_kw * heat_pump.cop * dt_h
+        
+        remaining_surplus = max(0.0, balance_kw - extra_hp_kw)
+        ely_kw, heat_ely, grid_export = _run_electrolyzer(
+            remaining_surplus, dt_h, electrolyzer, hydrogen_storage
         )
     else:
-        shortage_kw = abs(net_electric_balance_kw)
-        fuel_cell_power, grid_import, heat_from_fc = _run_fuel_cell(
-            shortage_kw,
-            market_price,
-            day_of_year,
-            dt_h,
-            config,
-            hydrogen_storage,
-            fuel_cell,
-            should_use_fc,
+        # Deficit: FC, then grid import
+        shortage_kw = abs(balance_kw)
+        fc_kw, grid_import, heat_fc = _run_fuel_cell(
+            shortage_kw, price, day_of_year, dt_h, config,
+            hydrogen_storage, fuel_cell, should_use_fc
         )
 
-    (
-        grid_import,
-        grid_export,
-        electrolyzer_power,
-        fuel_cell_power,
-        final_heat_pump_power_kw,
-        heat_from_ely,
-        heat_from_waste_kwh,
-    ) = _compute_heat_balance(
-        heat_load_kwh,
-        dt_h,
-        heat_pump,
-        base_heat_pump_power_kw,
-        extra_heat_pump_power_kw,
-        grid_import,
-        grid_export,
-        electrolyzer_power,
-        fuel_cell_power,
-        heat_from_ely,
-        heat_from_fc,
-        heat_from_hp_extra,
-        market_price,
-        day_of_year,
-        config,
-        hydrogen_storage,
-        thermal_storage,
-        electrolyzer,
-        fuel_cell,
-        should_use_fc,
-    )
+    # Heat balance
+    direct_heat = heat_ely + heat_fc + heat_hp_extra
+    heat_needed = load_heat * dt_h
+    
+    if direct_heat > heat_needed:
+        thermal_storage.charge(direct_heat - heat_needed)
+        heat_deficit = 0.0
+    else:
+        heat_deficit = heat_needed - direct_heat
+    
+    heat_from_storage = thermal_storage.discharge(heat_deficit)
+    heat_unmet = max(0.0, heat_deficit - heat_from_storage)
+    
+    # If heat unmet and temp >= 5°C, use additional HP
+    if heat_unmet > 0 and hp_available:
+        extra_hp_needed = heat_unmet / (heat_pump.cop * dt_h) if dt_h > 0 else 0.0
+        if grid_import > 0:
+            grid_import = max(0.0, grid_import - extra_hp_needed)
+        else:
+            surplus_for_ely = max(0.0, extra_hp_needed)
+            if surplus_for_ely > 0:
+                ely_kw_extra, heat_ely_extra, grid_export_extra = _run_electrolyzer(
+                    surplus_for_ely, dt_h, electrolyzer, hydrogen_storage
+                )
+                ely_kw += ely_kw_extra
+                heat_ely += heat_ely_extra
+                grid_export += grid_export_extra
+
+    heat_to_load = min(heat_needed, direct_heat + heat_from_storage)
 
     return {
         'grid_import_kw': grid_import,
         'grid_export_kw': grid_export,
-        'ely_power_kw': electrolyzer_power,
-        'fc_power_kw': fuel_cell_power,
+        'ely_power_kw': ely_kw,
+        'fc_power_kw': fc_kw,
         'h2_soc_kwh': hydrogen_storage.soc_kwh,
-        'ev_charge_kw': ev_home_charging_power_kw,
+        'ev_charge_kw': load_ev,
         'ev_unserved_drive_kwh': 0.0,
         'thermal_soc_kwh': thermal_storage.soc_kwh,
-        'hp_el_kw': final_heat_pump_power_kw,
-        'heat_from_waste_kw': (heat_from_waste_kwh / dt_h) if dt_h > 0 else 0.0,
+        'hp_el_kw': base_hp_kw + (0 if not hp_available else extra_hp_kw),
+        'heat_from_waste_kw': (heat_to_load / dt_h) if dt_h > 0 else 0.0,
     }
 
 

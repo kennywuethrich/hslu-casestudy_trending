@@ -1,97 +1,64 @@
-"""CSV-Import und Profilaufbereitung für die Simulation."""
+"""
+CSV-Import und Profilaufbereitung für die Simulation.
+ANNAHME: DATEN SIND BEREITS SORTIERT NACH TIMESTAMP...
+"""
 
 import pandas as pd
-import os
+from pathlib import Path
 from config import SystemConfig
 
 
-class ProfileGenerator:
-    """Lädt die Eingangsprofile aus CSV."""
+def _remap_ev_to_daytime(ev_series: pd.Series) -> pd.Series:
+    """Verteilt EV-Energie auf 8-17 Uhr um."""
+    result = pd.Series(0.0, index=ev_series.index)
+    
+    for day in ev_series.index.floor('D').unique():
+        day_mask = (ev_series.index.floor('D') == day)
+        day_energy = float(ev_series[day_mask].sum())
+        
+        if day_energy <= 0:
+            continue
+            
+        daytime_mask = day_mask & (ev_series.index.hour >= 8) & (ev_series.index.hour < 17)
+        if daytime_mask.sum() > 0:
+            result.loc[daytime_mask] = day_energy / daytime_mask.sum()
+    
+    return result
 
-    REQUIRED_BASE_COLUMNS = [
-        'datetime',
-        'pv_kw',
-        'load_el_kw',
-        'load_heat_kw',
-        'ev_demand_kw',
-    ]
 
-    @staticmethod
-    def _resolve_csv_path(config: SystemConfig) -> str:
-        return os.path.join(config.data_dir, config.data_csv)
-
-    @staticmethod
-    def _remap_ev_profile_to_daytime(ev_kw: pd.Series) -> pd.Series:
-        if ev_kw.empty:
-            return ev_kw
-
-        result = pd.Series(0.0, index=ev_kw.index)
-        day_keys = ev_kw.index.floor('D')
-
-        for day in day_keys.unique():
-            day_mask = (day_keys == day)
-            day_series = ev_kw[day_mask]
-            day_energy_kwh = float(day_series.sum())
-
-            if day_energy_kwh <= 0:
-                continue
-
-            hours = day_series.index.hour
-            daytime_mask = (hours >= 8) & (hours < 17)
-
-            if daytime_mask.sum() == 0:
-                result.loc[day_series.index] = day_series.values
-                continue
-
-            per_step_kw = day_energy_kwh / int(daytime_mask.sum())
-
-            remapped = pd.Series(0.0, index=day_series.index)
-            remapped.iloc[daytime_mask] = per_step_kw
-            result.loc[day_series.index] = remapped.values
-
-        return result
-
-    @staticmethod
-    def load_simulation_profiles(config: SystemConfig, ev_profile_mode: str = 'as_is') -> pd.DataFrame:
-        filepath = ProfileGenerator._resolve_csv_path(config)
-        if not os.path.exists(filepath):
-            raise FileNotFoundError(
-                f"CSV-Datei nicht gefunden: {filepath}. Bitte data/generate_data.py ausführen."
-            )
-
-        df = pd.read_csv(filepath)
-        missing_cols = [
-            col for col in ProfileGenerator.REQUIRED_BASE_COLUMNS if col not in df.columns
-        ]
-        if missing_cols:
-            raise ValueError(
-                f"CSV '{filepath}' hat nicht alle Pflichtspalten: {', '.join(missing_cols)}"
-            )
-
-        df['datetime'] = pd.to_datetime(df['datetime'], errors='raise', utc=True)
-        df['datetime'] = df['datetime'].dt.tz_convert('Europe/Zurich')
-        df = df.sort_values('datetime').set_index('datetime')
-
-        ev_kw = df['ev_demand_kw'].astype(float)
-        if ev_profile_mode == 'daytime':
-            ev_kw = ProfileGenerator._remap_ev_profile_to_daytime(ev_kw)
-        elif ev_profile_mode != 'as_is':
-            raise ValueError(f"Ungültiger ev_profile_mode='{ev_profile_mode}'. Erlaubt: 'as_is', 'daytime'.")
-
-        timestamps = df.index
-        out = pd.DataFrame({
-            'hour_of_day': timestamps.hour,
-            'day_of_year': timestamps.dayofyear - 1,
-            'pv_kw': df['pv_kw'].to_numpy(),
-            'load_el_kw': df['load_el_kw'].to_numpy(),
-            'load_heat_kw': df['load_heat_kw'].to_numpy(),
-            'ev_demand_kw': ev_kw.to_numpy(),
-            'price_buy': config.price_buy_chf,
-            'price_sell': config.price_sell_chf,
-            'co2_intensity': config.co2_grid_kg_kwh,
-            'dt_h': 1.0,
-        })
-        return out
-
-    def __repr__(self):
-        return "ProfileGenerator(CSV-only)"
+def load_profiles(config: SystemConfig, ev_mode: str = 'as_is') -> pd.DataFrame:
+    """Lädt Energie-Profile aus 3 CSV-Dateien (8760 Zeilen, stündlich)."""
+    
+    root = Path(__file__).parent
+    el = pd.read_csv(root / 'data' / 'electricity_demand_profile.csv', skip_blank_lines=True)
+    heat = pd.read_csv(root / 'data' / 'heat_demand_profile.csv', skip_blank_lines=True)
+    pv = pd.read_csv(root / 'data' / 'pv_yield_profile.csv', skip_blank_lines=True)
+    
+    n = len(el)
+    
+    # Create DatetimeIndex only for EV remapping (if needed)
+    dt_idx = pd.date_range('2021-01-01', periods=n, freq='h')
+    ev = pd.Series(0.0, index=dt_idx)
+    if ev_mode == 'daytime':
+        ev = _remap_ev_to_daytime(ev)
+    elif ev_mode != 'as_is':
+        raise ValueError(f"Ungültiger ev_mode='{ev_mode}'.")
+    
+    return pd.DataFrame({
+        'hour_of_day': [i % 24 for i in range(n)],
+        'day_of_year': [i // 24 for i in range(n)],
+        'load_el_kw': el['total_electrcitiy_consumption_kWh'].values,
+        'load_heat_kw': (heat['Demand space heating kWh'] + heat['Demand domestic hot water kWh']).values,
+        'pv_kw': pv['pv_kw'].values,
+        'outdoor_temp_c': pv['outdoor_temp_c'].values,
+        'ev_demand_kw': ev.values,
+        'price_buy': config.price_buy_chf,
+        'price_sell': config.price_sell_chf,
+        'co2_intensity': config.co2_grid_kg_kwh,
+        'dt_h': 1.0
+    })
+if __name__ == "__main__":
+    config = SystemConfig()
+    profiles = load_profiles(config)
+    print(f"✓ {profiles.shape[0]} profiles loaded")
+    print(profiles.head(2))

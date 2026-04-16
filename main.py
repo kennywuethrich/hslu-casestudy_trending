@@ -18,9 +18,7 @@ def main():
 
     simulator.run_all_strategies(profiles)
     simulator.print_results(include_plots=True)
-
-    print("\nExportiere Ergebnisse...")
-    simulator.export_results()
+    simulator.analyzer.save_kpis_to_csv(simulator.get_kpis_summary())
     
     print("\n✓ Simulation abgeschlossen!")
     print("="*80 + "\n")

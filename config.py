@@ -40,7 +40,7 @@ class SystemConfig:
     ely_eff_th: float = 0.20
     fc_eff_el: float = 0.449
     fc_eff_th: float = 0.508
-    hp_cop: float = 2.67 #(Netto COP mit H2 excel pilotprojekt)
+    hp_cop: float = 2.67 # (Netto COP mit H2 excel pilotprojekt) Coefficient of Performance oder Leistungszahl
 
     # Preise und Regeln mit API? bei EKZ (Zürich)
     price_buy_chf: float = 0.28

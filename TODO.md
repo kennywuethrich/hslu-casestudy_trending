@@ -25,6 +25,25 @@ Drop Down GUI mit
 - [ ] Strompreise als API (bei EKZ) [Felix]
 - [ ] Daten updaten. [Nick]
 
+
+GUI: 
+
+EV: as_is oder daytime in szenario (GUI) einbauen. also daten der elektro autos. 
+
+Plots:
+
+alle plots nochmals überarbeiten in plots.py
+
+
+
+analyzer.py _check_
+profiles.py _check_    <-- Muss eventuell nochmals überarbeiten werden wegen EV
+scenario.py _check_   <-- Aktuell 2 Szenarien drin. kann beliebig erweitert werden. 
+dispatch.py _check_ (weiss aber ned gnau für was die datei esch)
+strategies.py _check_
+simulator.py _check_
+
+
 ## 07.05.2026
 
 Alles Funktionsfähig. Code soweit fertig

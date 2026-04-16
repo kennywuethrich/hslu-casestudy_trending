@@ -1,298 +1,158 @@
-"""GUI für Szenario-Konfiguration mit customtkinter."""
-
-import sys
-from pathlib import Path
-sys.path.insert(0, str(Path(__file__).parent.parent))
+"""GUI für Strategie-Vergleich."""
 
 import customtkinter as ctk
-import pandas as pd
+from tkinter import ttk
 import threading
-from typing import Optional, Dict
+import sys
+from pathlib import Path
 
-from user_config import UserInputConfig
-from scenario_builder import ScenarioBuilder
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from scenario import ScenarioManager
 from simulator import Simulator
-from profiles import ProfileGenerator
-from analyzer import ResultAnalyzer
-from config import SystemConfig
 
 
-class SimulationGUI:
-    """GUI für interaktive Szenario-Parametrisierung und Simulation."""
-    
-    def __init__(self, root: ctk.CTk):
+class StrategyGUI:
+    def __init__(self, root):
         self.root = root
-        self.root.title("H2-Microgrid Simulator")
-        self.root.geometry("900x1200")
+        self.root.title("H₂-Strategie Vergleich")
+        self.root.geometry("1200x700")
         
-        self.profile_generator = ProfileGenerator()
-        self.profiles: Optional[pd.DataFrame] = None
-        self.simulation_running = False
-        self.last_results: Optional[Dict] = None
+        # === Config ===
+        ctk.set_appearance_mode("dark")
+        ctk.set_default_color_theme("blue")
         
-        self._build_ui()
-        self._load_profiles()
+        # === Main Grid ===
+        main = ctk.CTkFrame(root)
+        main.pack(fill="both", expand=True, padx=15, pady=15)
+        main.grid_rowconfigure(2, weight=1)
+        main.grid_columnconfigure(0, weight=1)
+        main.grid_columnconfigure(1, weight=1)
+        
+        # Title
+        title_wrap = ctk.CTkFrame(main, fg_color="transparent")
+        title_wrap.grid(row=0, column=0, columnspan=2, pady=(0, 20))
+
+        lbl_h = ctk.CTkLabel(title_wrap, text="H", font=("Segoe UI", 34, "bold"))
+        lbl_2 = ctk.CTkLabel(title_wrap, text="2", font=("Segoe UI", 18, "bold"))
+        lbl_txt = ctk.CTkLabel(title_wrap, text=" Strategie-Vergleich", font=("Segoe UI", 34, "bold"))
+
+        lbl_h.grid(row=0, column=0, sticky="n")
+        lbl_2.grid(row=0, column=1, sticky="s", pady=(14, 0))  # nach unten schieben
+        lbl_txt.grid(row=0, column=2, sticky="n")
+        
+        # Scenario selection
+        sel_frame = ctk.CTkFrame(main)
+        sel_frame.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(0, 15))
+        
+        scenarios = [s.name for s in ScenarioManager.get_all_scenarios()]
+        ctk.CTkLabel(sel_frame, text="Szenario 1:", font=("Helvetica", 12)).pack(side="left", padx=(0, 10))
+        self.s1_combo = ctk.CTkComboBox(sel_frame, values=scenarios, width=200, command=self._update_desc1)
+        self.s1_combo.set(scenarios[0])
+        self.s1_combo.pack(side="left", padx=(0, 40))
+        
+        ctk.CTkLabel(sel_frame, text="Szenario 2:", font=("Helvetica", 12)).pack(side="left", padx=(0, 10))
+        self.s2_combo = ctk.CTkComboBox(sel_frame, values=scenarios, width=200, command=self._update_desc2)
+        self.s2_combo.set(scenarios[1] if len(scenarios) > 1 else scenarios[0])
+        self.s2_combo.pack(side="left")
+        
+        # Descriptions (side by side)
+        self.desc1 = ctk.CTkTextbox(main, height=120, width=400)
+        self.desc1.grid(row=2, column=0, sticky="nsew", padx=(0, 10))
+        self.desc1.configure(state="disabled")
+        
+        self.desc2 = ctk.CTkTextbox(main, height=120, width=400)
+        self.desc2.grid(row=2, column=1, sticky="nsew", padx=(10, 0))
+        self.desc2.configure(state="disabled")
+        
+        # Button + Status
+        btn_frame = ctk.CTkFrame(main)
+        btn_frame.grid(row=3, column=0, columnspan=2, sticky="ew", pady=15)
+        
+        self.btn = ctk.CTkButton(btn_frame, text="VERGLEICHEN", command=self._compare, font=("Helvetica", 13))
+        self.btn.pack(side="left", padx=(0, 15))
+        
+        self.status = ctk.CTkLabel(btn_frame, text="Bereit", text_color="gray")
+        self.status.pack(side="left")
+        
+        # Results table
+        self.table_frame = ctk.CTkFrame(main)
+        self.table_frame.grid(row=4, column=0, columnspan=2, sticky="nsew", pady=(10, 0))
+        self.table_frame.grid_rowconfigure(0, weight=1)
+        self.table_frame.grid_columnconfigure(0, weight=1)
+        
+        self._update_desc1(None)
+        self._update_desc2(None)
     
-    def _build_ui(self):
-        """Erstellt UI-Elemente."""
-        self.main_frame = ctk.CTkScrollableFrame(self.root, corner_radius=0)
-        self.main_frame.pack(side=ctk.LEFT, fill=ctk.BOTH, expand=True, padx=0, pady=0)
-        
-        self._build_input_section()
-        self._build_output_section()
+    def _update_desc(self, combo, textbox):
+        s = ScenarioManager.get_by_name(combo.get())
+        textbox.configure(state="normal")
+        textbox.delete("1.0", "end")
+        textbox.insert("1.0", s.description)
+        textbox.configure(state="disabled")
     
-    def _build_input_section(self):
-        """Input-Bereich für Parameter."""
-        input_frame = ctk.CTkFrame(self.main_frame, fg_color="transparent")
-        input_frame.pack(fill=ctk.X, padx=20, pady=20)
-        
-        title = ctk.CTkLabel(input_frame, text="Szenario-Parameter", 
-                            font=("Arial", 18, "bold"))
-        title.pack(anchor=ctk.W, pady=(0, 20))
-        
-        self._build_ev_slider(input_frame)
-        self._build_hp_checkbox(input_frame)
-        self._build_smart_energy_checkbox(input_frame)
-        self._build_price_section(input_frame)
-        
-        button_frame = ctk.CTkFrame(input_frame, fg_color="transparent")
-        button_frame.pack(fill=ctk.X, pady=(30, 0))
-        
-        self.run_button = ctk.CTkButton(
-            button_frame,
-            text="📊 Simulation starten",
-            command=self._on_run_simulation,
-            font=("Arial", 14, "bold"),
-            height=40,
-            corner_radius=8
-        )
-        self.run_button.pack(side=ctk.LEFT, padx=(0, 10), fill=ctk.X, expand=True)
-        
-        self.status_label = ctk.CTkLabel(
-            button_frame,
-            text="",
-            font=("Arial", 12),
-            text_color="gray"
-        )
-        self.status_label.pack(side=ctk.LEFT, padx=10)
+    def _update_desc1(self, _):
+        self._update_desc(self.s1_combo, self.desc1)
     
-    def _build_ev_slider(self, parent):
-        """Schieberegler für E-Auto-Anzahl."""
-        frame = ctk.CTkFrame(parent, fg_color="transparent")
-        frame.pack(fill=ctk.X, pady=15)
-        
-        label = ctk.CTkLabel(frame, text="E-Autos", font=("Arial", 14, "bold"))
-        label.pack(anchor=ctk.W, pady=(0, 8))
-        
-        slider_frame = ctk.CTkFrame(frame, fg_color="transparent")
-        slider_frame.pack(fill=ctk.X)
-        
-        self.ev_slider = ctk.CTkSlider(
-            slider_frame,
-            from_=0,
-            to=25,
-            number_of_steps=25,
-            command=self._update_ev_label,
-            height=6
-        )
-        self.ev_slider.pack(side=ctk.LEFT, fill=ctk.X, expand=True)
-        self.ev_slider.set(1)
-        
-        self.ev_label = ctk.CTkLabel(slider_frame, text="1", font=("Arial", 12, "bold"), width=30)
-        self.ev_label.pack(side=ctk.LEFT, padx=(10, 0))
+    def _update_desc2(self, _):
+        self._update_desc(self.s2_combo, self.desc2)
     
-    def _update_ev_label(self, value):
-        """Aktualisiert Label bei Slider-Bewegung."""
-        self.ev_label.configure(text=str(int(float(value))))
+    def _compare(self):
+        self.btn.configure(state="disabled")
+        self.status.configure(text="⏳ Läuft...", text_color="orange")
+        threading.Thread(target=self._worker, daemon=True).start()
     
-    def _build_hp_checkbox(self, parent):
-        """Checkbox für Wärmepumpen-Ausfall."""
-        self.hp_var = ctk.BooleanVar(value=False)
-        checkbox = ctk.CTkCheckBox(
-            parent,
-            text="Wärmepumpe ausgefallen",
-            variable=self.hp_var,
-            font=("Arial", 13),
-            checkbox_height=20,
-            checkbox_width=20
-        )
-        checkbox.pack(anchor=ctk.W, pady=15)
-    
-    def _build_smart_energy_checkbox(self, parent):
-        """Checkbox für Smart Energy."""
-        self.smart_energy_var = ctk.BooleanVar(value=False)
-        checkbox = ctk.CTkCheckBox(
-            parent,
-            text="Smart Energy nutzen (30% Last zu PV-Spitzen)",
-            variable=self.smart_energy_var,
-            font=("Arial", 13),
-            checkbox_height=20,
-            checkbox_width=20
-        )
-        checkbox.pack(anchor=ctk.W, pady=15)
-    
-    def _build_price_section(self, parent):
-        """Variable Strompreise mit Nacht/Tag-Tarif."""
-        frame = ctk.CTkFrame(parent, fg_color="transparent")
-        frame.pack(fill=ctk.X, pady=15)
-        
-        self.var_price_var = ctk.BooleanVar(value=False)
-        checkbox = ctk.CTkCheckBox(
-            frame,
-            text="Variable Strompreise aktivieren",
-            variable=self.var_price_var,
-            command=self._toggle_price_inputs,
-            font=("Arial", 13),
-            checkbox_height=20,
-            checkbox_width=20
-        )
-        checkbox.pack(anchor=ctk.W)
-        
-        self.price_input_frame = ctk.CTkFrame(frame, fg_color="transparent")
-        self.price_input_frame.pack(fill=ctk.X, pady=(10, 0), padx=(20, 0))
-        
-        night_frame = ctk.CTkFrame(self.price_input_frame, fg_color="transparent")
-        night_frame.pack(fill=ctk.X, pady=5)
-        
-        ctk.CTkLabel(night_frame, text="Nacht-Tarif (CHF/kWh):", font=("Arial", 12)).pack(side=ctk.LEFT)
-        self.price_night_input = ctk.CTkEntry(night_frame, width=80, font=("Arial", 12))
-        self.price_night_input.pack(side=ctk.LEFT, padx=(10, 0))
-        self.price_night_input.insert(0, "0.15")
-        self.price_night_input.configure(state=ctk.DISABLED)
-        
-        day_frame = ctk.CTkFrame(self.price_input_frame, fg_color="transparent")
-        day_frame.pack(fill=ctk.X, pady=5)
-        
-        ctk.CTkLabel(day_frame, text="Tag-Tarif (CHF/kWh):", font=("Arial", 12)).pack(side=ctk.LEFT)
-        self.price_day_input = ctk.CTkEntry(day_frame, width=80, font=("Arial", 12))
-        self.price_day_input.pack(side=ctk.LEFT, padx=(10, 0))
-        self.price_day_input.insert(0, "0.30")
-        self.price_day_input.configure(state=ctk.DISABLED)
-    
-    def _toggle_price_inputs(self):
-        """Aktiviert/deaktiviert Preis-Eingabefelder."""
-        state = ctk.NORMAL if self.var_price_var.get() else ctk.DISABLED
-        self.price_night_input.configure(state=state)
-        self.price_day_input.configure(state=state)
-    
-    def _build_output_section(self):
-        """Bereich für Ergebnisse."""
-        self.output_frame = ctk.CTkFrame(self.main_frame, fg_color="transparent")
-        self.output_frame.pack(fill=ctk.BOTH, expand=True, padx=20, pady=20)
-        
-        title = ctk.CTkLabel(self.output_frame, text="Ergebnisse", 
-                            font=("Arial", 18, "bold"))
-        title.pack(anchor=ctk.W, pady=(0, 15))
-        
-        self.result_text = ctk.CTkTextbox(self.output_frame, height=300, corner_radius=8)
-        self.result_text.pack(fill=ctk.BOTH, expand=True)
-        self.result_text.configure(state=ctk.DISABLED)
-        
-        self.plot_frame = ctk.CTkFrame(self.output_frame, fg_color="gray20", corner_radius=8, height=300)
-        self.plot_frame.pack(fill=ctk.BOTH, expand=True, pady=(15, 0))
-    
-    def _load_profiles(self):
-        """Lädt Profile beim Start."""
+    def _worker(self):
         try:
-            system_config = SystemConfig()
-            self.profiles = self.profile_generator.load_simulation_profiles(system_config)
-            self._update_status("✓ Profile geladen")
+            s1 = ScenarioManager.get_by_name(self.s1_combo.get())
+            s2 = ScenarioManager.get_by_name(self.s2_combo.get())
+            
+            sim1, sim2 = Simulator(s1), Simulator(s2)
+            sim1.run_all_strategies(sim1.generate_profiles())
+            sim2.run_all_strategies(sim2.generate_profiles())
+            
+            self.root.after(0, self._show, s1.name, s2.name, sim1.get_kpis_summary()[0], sim2.get_kpis_summary()[0])
         except Exception as e:
-            self._update_status(f"✗ Fehler beim Laden: {str(e)}")
+            print(f"Fehler: {e}")
+            self.root.after(0, lambda: self.status.configure(text=f"Fehler: {str(e)[:40]}", text_color="red"))
+            self.root.after(0, lambda: self.btn.configure(state="normal"))
     
-    def _on_run_simulation(self):
-        """Startet Simulation in separatem Thread."""
-        if self.simulation_running or self.profiles is None:
-            return
+    def _show(self, s1_name, s2_name, kpi1, kpi2):
+        for w in self.table_frame.winfo_children():
+            w.destroy()
         
-        self.simulation_running = True
-        self.run_button.configure(state=ctk.DISABLED)
-        self._update_status("⏳ Simulation läuft...")
+        tree = ttk.Treeview(self.table_frame, columns=("KPI", s1_name, s2_name, "Δ"), height=12)
+        tree.column("#0", width=0)
+        tree.column("KPI", width=250, anchor="w")
+        tree.column(s1_name, width=180, anchor="center")
+        tree.column(s2_name, width=180, anchor="center")
+        tree.column("Δ", width=100, anchor="center")
         
-        thread = threading.Thread(target=self._run_simulation_thread, daemon=True)
-        thread.start()
-    
-    def _run_simulation_thread(self):
-        """Führt Simulation aus (in Thread)."""
-        try:
-            user_config = self._get_user_config()
-            
-            scenario = ScenarioBuilder.build(user_config, self.profiles)
-            simulator = Simulator(scenario)
-            
-            simulator.run_all_strategies(self.profiles)
-            self.last_results = simulator.results
-            
-            self._display_results(simulator)
-            self._update_status("✓ Simulation abgeschlossen")
-            
-        except Exception as e:
-            self._update_status(f"✗ Fehler: {str(e)}")
+        tree.heading("KPI", text="KPI", anchor="w")
+        tree.heading(s1_name, text=s1_name, anchor="center")
+        tree.heading(s2_name, text=s2_name, anchor="center")
+        tree.heading("Δ", text="Differenz", anchor="center")
         
-        finally:
-            self.simulation_running = False
-            self.run_button.configure(state=ctk.NORMAL)
-    
-    def _get_user_config(self) -> UserInputConfig:
-        """Liest Parameter aus GUI aus."""
-        return UserInputConfig(
-            num_evs=int(float(self.ev_slider.get())),
-            hp_failure=self.hp_var.get(),
-            smart_energy_enabled=self.smart_energy_var.get(),
-            variable_prices_enabled=self.var_price_var.get(),
-            price_night_chf_per_kwh=float(self.price_night_input.get() or "0.15"),
-            price_day_chf_per_kwh=float(self.price_day_input.get() or "0.30"),
-        )
-    
-    def _display_results(self, simulator: Simulator):
-        """Zeigt Ergebnisse in GUI an."""
-        self.result_text.configure(state=ctk.NORMAL)
-        self.result_text.delete("1.0", ctk.END)
+        for key in kpi1.keys():
+            if key == "label":
+                continue
+            v1, v2 = kpi1.get(key, "-"), kpi2.get(key, "-")
+            try:
+                delta = f"{float(v2) - float(v1):+.1f}"
+            except:
+                delta = "-"
+            tree.insert("", "end", values=(key, v1, v2, delta))
         
-        kpis_summary = simulator.get_kpis_summary()
-        
-        for idx, kpi_dict in enumerate(kpis_summary, 1):
-            self.result_text.insert(ctk.END, f"\n{'='*60}\n")
-            self.result_text.insert(ctk.END, f"Strategie {idx}\n")
-            self.result_text.insert(ctk.END, f"{'='*60}\n\n")
-            
-            for key, value in kpi_dict.items():
-                if key != 'label':
-                    self.result_text.insert(ctk.END, f"{key:<40} {value}\n")
-        
-        self.result_text.configure(state=ctk.DISABLED)
-        
-        self._plot_results(simulator)
-    
-    def _plot_results(self, simulator: Simulator):
-        """Erstellt und zeigt Plots."""
-        try:
-            for strategy_key, result in simulator.results.items():
-                result_df = result['result_df']
-                
-                title = f"{simulator.scenario.name} – {strategy_key} – H2-SOC"
-                simulator.analyzer.plot_h2_soc_year(
-                    result_df,
-                    title=title,
-                    save_path=f"h2_soc_{strategy_key.lower()}.png"
-                )
-        except Exception as e:
-            print(f"Plot-Fehler: {e}")
-    
-    def _update_status(self, message: str):
-        """Aktualisiert Status-Label (threadsafe)."""
-        self.root.after(0, lambda: self.status_label.configure(text=message))
+        tree.pack(fill="both", expand=True)
+        self.status.configure(text="✓ Fertig", text_color="green")
+        self.btn.configure(state="normal")
 
 
-def launch_gui():
-    """Startet die Anwendung."""
-    ctk.set_appearance_mode("dark")
-    ctk.set_default_color_theme("blue")
-    
+def launch():
     root = ctk.CTk()
-    app = SimulationGUI(root)
+    StrategyGUI(root)
     root.mainloop()
 
 
 if __name__ == "__main__":
-    launch_gui()
+    launch()

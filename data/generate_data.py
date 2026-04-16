@@ -1,86 +1,30 @@
-"""
-Wohnüberbauung Anna-Heer-Strasse Zürich - Zeitreihen-Generator
-Generiert simulationsfertige 1h- und 15min-CSV-Dateien.
+"""Generiert eine einzige 1h-Zeitreihe mit PV-Leistung und Aussentemperatur fuer Zuerich."""
 
-Entwickler-Kurzinfo:
-- Zweck: Erzeugt reproduzierbare Eingangsdaten fuer Simulationen.
-- Inputs: Jahreskonstanten, Gebaeudeannahmen und EV-Modus.
-- Outputs: CSV-Dateien mit pv_kw, load_el_kw, load_heat_kw, ev_demand_kw.
-- Typische Aenderungen: Lastmodell, Wetterannahmen, EV-Verteilung, Dateinamen.
-
-Enthält alle zeitabhängigen physikalischen Profile:
-- PV-Leistung [kW]
-- Elektrische Last [kW]
-- Wärmelast [kW]
-- EV-Ladebedarf [kW]
-
-Preis- und CO2-Werte bleiben bewusst in config.py (szenarioabhängig).
-"""
-
-import pandas as pd
-import numpy as np
-import pvlib
 from pathlib import Path
 
-# ============================================================================
-# CONFIG - Hier einstellen!
-# ============================================================================
+import numpy as np
+import pandas as pd
+import pvlib
+
 
 YEAR = 2026
-NUM_APARTMENTS = 83
 PV_KWP = 87.0
 PV_AREA_M2 = 87
-# Gebäudestandard: steuert den spezifischen Transmissionsverlust (kW/K)
-# Wertebereich grob für gesamte Überbauung, kalibrierbar mit Messdaten.
-BUILDING_STANDARD = 'modern'  # 'modern', 'standard', 'old'
-
-# Raumtemperatur-/Heizungsannahmen
-INDOOR_SETPOINT_C = 20.5
-DHW_BASE_KW = 4.0
-DHW_MORNING_PEAK_KW = 4.5
-DHW_EVENING_PEAK_KW = 3.0
-
-# Drehung der Wohnblöcke relativ zur Nord-Süd-Achse (gegen den Uhrzeigersinn)
 BLOCK_ROTATIONS_DEG = [15, 30, 45]
-OUTPUT_RESOLUTIONS = ('1h', '15min')
-EV_MODE = 'evening'  # 'evening', 'daytime', 'workplace'
-
-# ============================================================================
 
 
-def generate_pv_data(times, pv_area_m2=87):
-    """
-    Generiert PV-Ertragsdaten mit pvlib Sonnenstandsmodell.
-    
-    PV-Aufteilung:
-    - 3 Wohnblöcke mit je 1/3 der Gesamtfläche
-    - Pro Block: 50% der Fläche +10° und 50% der Fläche -10°
-    - Die Flächen sind Ost/West geneigt
-    - Blöcke sind relativ zur Nord-Süd-Achse um 15°, 30° und 45° gedreht
-    
-    Args:
-        times: pandas DatetimeIndex mit Zeitstempel
-        pv_area_m2: Gesamtfläche der PV-Anlage in m²
-    
-    Returns:
-        pandas Series mit PV-Ertrag in Wh/m²
-    """
-    # Zürich Koordinaten
+def generate_pv_data(times: pd.DatetimeIndex, pv_area_m2: float = PV_AREA_M2) -> pd.Series:
+    """Generiert PV-Einstrahlung [Wh/m²] für die gegebene Zeitachse."""
     location = pvlib.location.Location(
         latitude=47.37,
         longitude=8.54,
         tz='Europe/Zurich',
-        name='Zurich'
+        name='Zurich',
     )
-    
-    # Sonnenstand berechnen
+
     solar_position = location.get_solarposition(times)
-    
-    # Clearsky-Strahlung (ideales Wetter)
     clearsky = location.get_clearsky(times, model='ineichen')
-    
-    # Modellierung der 3 Blöcke mit je 2 gegensätzlichen Dachflächen (Ost/West).
-    # Eine "-10°"-Neigung wird physikalisch als +10° mit gegenüberliegendem Azimut modelliert.
+
     block_area_m2 = pv_area_m2 / 3
     surface_area_m2 = block_area_m2 / 2
 
@@ -88,7 +32,6 @@ def generate_pv_data(times, pv_area_m2=87):
     total_area_m2 = 0.0
 
     for rotation_deg in BLOCK_ROTATIONS_DEG:
-        # Ohne Rotation: Ost = 90°, West = 270°; mit Rotation gegen Uhrzeigersinn verschoben.
         east_azimuth = (90 - rotation_deg) % 360
         west_azimuth = (270 - rotation_deg) % 360
 
@@ -101,108 +44,23 @@ def generate_pv_data(times, pv_area_m2=87):
                 dni=clearsky['dni'],
                 ghi=clearsky['ghi'],
                 dhi=clearsky['dhi'],
-                model='isotropic'
+                model='isotropic',
             )
             poa_weighted_sum += poa_irradiance['poa_global'] * surface_area_m2
             total_area_m2 += surface_area_m2
 
-    # Flächengewichteter Mittelwert über alle Teilflächen
     poa_combined = poa_weighted_sum / total_area_m2
-    
-    # Wolkeneffekt: Reduzierung durch zufällige Bewölkung
-    # Realistische Bewölkung: ~30% der Zeit teilweise bewölkt
-    np.random.seed(42)  # Reproduzierbar
+
+    np.random.seed(42)
     cloud_factor = np.random.normal(loc=0.85, scale=0.15, size=len(times))
-    cloud_factor = np.clip(cloud_factor, 0.3, 1.0)  # 30-100%
-    
+    cloud_factor = np.clip(cloud_factor, 0.3, 1.0)
+
     poa_with_clouds = poa_combined * cloud_factor
-    
     return pd.Series(poa_with_clouds, index=times, name='pv_irradiance_wh_m2')
 
 
-def generate_load_profile(times, resolution: str, num_apartments=83):
-    """
-    Generiert realistische Stromverbrauchsdaten basierend auf SLP-H0 Profil.
-    (Standardlastprofil Haushalt, Deutschland/Schweiz)
-    
-    Args:
-        times: pandas DatetimeIndex
-        num_apartments: Anzahl der Wohnungen
-    
-    Returns:
-        pandas Series mit Stromverbrauch in kWh pro Zeitschritt
-    """
-    np.random.seed(42)
-    
-    # Durchschnittlicher Jahresverbrauch pro Wohnung: ~3500 kWh/Jahr
-    # (typisch für Schweiz: 2000-3500 kWh für Einfamilienhaus/Wohnung)
-    annual_consumption_per_apartment = 3500  # kWh/Jahr
-    
-    # Durchschnittlicher Verbrauch pro Zeitschritt
-    if resolution == '1h':
-        hourly_avg = annual_consumption_per_apartment / 8760  # kWh/Wohnung/Stunde
-    else:  # 15min
-        hourly_avg = annual_consumption_per_apartment / 35040  # kWh/Wohnung/15min
-    
-    # Basis-Tagesgang (SLP-H0 ähnlich)
-    # Peaks: Morgens (6-8h), Abends (18-21h)
-    hours = times.hour
-    days_of_year = times.dayofyear
-    
-    # Tagesgang-Faktor (vereinfacht)
-    hourly_profile = np.ones(len(times))
-    
-    # Nachts (0-6 Uhr): reduzierter Verbrauch (50%)
-    night_mask = (hours >= 0) & (hours < 6)
-    hourly_profile[night_mask] *= 0.5
-    
-    # Morgen-Peak (6-9 Uhr): erhöht (120%)
-    morning_mask = (hours >= 6) & (hours < 9)
-    hourly_profile[morning_mask] *= 1.2
-    
-    # Tagsüber (9-17 Uhr): normal (100%)
-    day_mask = (hours >= 9) & (hours < 17)
-    hourly_profile[day_mask] *= 1.0
-    
-    # Abend-Peak (17-21 Uhr): stark erhöht (150%)
-    evening_mask = (hours >= 17) & (hours < 21)
-    hourly_profile[evening_mask] *= 1.5
-    
-    # Spät-Abend (21-24 Uhr): reduziert (70%)
-    late_evening_mask = (hours >= 21) & (hours < 24)
-    hourly_profile[late_evening_mask] *= 0.7
-    
-    # Wochentag-Faktor
-    weekday_factor = np.ones(len(times))
-    is_weekend = times.dayofweek >= 5  # Samstag/Sonntag
-    weekday_factor[is_weekend] *= 0.85  # Wochenende: -15%
-    
-    # Saisonalität (Winter mehr Verbrauch wegen Licht/Haushalt, Sommer weniger)
-    # Peak im Januar/Dezember, Minimum im Juli/August
-    seasonal_factor = 0.85 + 0.25 * np.cos(2 * np.pi * (days_of_year - 15) / 365.25)
-    
-    # Zufälliges Rauschen (Tag-zu-Tag Variabilität)
-    random_noise = np.random.normal(loc=1.0, scale=0.1, size=len(times))
-    random_noise = np.clip(random_noise, 0.7, 1.3)
-    
-    # Kombinieren
-    load_profile = (
-        hourly_avg * num_apartments *
-        hourly_profile *
-        weekday_factor *
-        seasonal_factor *
-        random_noise
-    )
-    
-    return pd.Series(load_profile, index=times, name='electricity_consumption_kwh')
-
-
-def generate_outdoor_temperature(times):
-    """
-    Vereinfachtes Außenluft-Temperaturprofil Zürich [°C].
-    - Saisonal: kalt im Winter, warm im Sommer
-    - Tagesgang: tagsüber wärmer, nachts kälter
-    """
+def generate_outdoor_temperature(times: pd.DatetimeIndex) -> pd.Series:
+    """Erzeugt ein stundenaufgeloestes Aussentemperaturprofil fuer Zuerich [degC]."""
     np.random.seed(42)
     day_of_year = times.dayofyear
     hour = times.hour + times.minute / 60.0
@@ -211,143 +69,50 @@ def generate_outdoor_temperature(times):
     diurnal_c = 3.0 * np.sin(2 * np.pi * (hour - 14) / 24.0)
     noise_c = np.random.normal(loc=0.0, scale=1.2, size=len(times))
 
-    temp_c = seasonal_c + diurnal_c + noise_c
-    temp_c = np.clip(temp_c, -12.0, 35.0)
+    temp_c = np.round(np.clip(seasonal_c + diurnal_c + noise_c, -12.0, 35.0), 1)
     return pd.Series(temp_c, index=times, name='outdoor_temp_c')
 
 
-def _building_heat_loss_coeff_kw_per_k(building_standard: str) -> float:
-    """Transmissionsverlustkoeffizient der Überbauung [kW/K]."""
-    standard = building_standard.strip().lower()
-    if standard == 'modern':
-        return 2.8
-    if standard == 'standard':
-        return 4.5
-    if standard == 'old':
-        return 6.5
-    raise ValueError("building_standard muss 'modern', 'standard' oder 'old' sein")
-
-
-def generate_heat_profile(times, resolution: str, outdoor_temp_c: pd.Series,
-                          building_standard: str = 'modern'):
-    """Generiert temperaturabhängiges Wärmelastprofil [kWh pro Zeitschritt]."""
-    hours = times.hour
-    dt_h = 1.0 if resolution == '1h' else 0.25
-
-    # Raumheizung über Temperaturdifferenz (heizt auch bei >5°C, sofern unter Setpoint)
-    ua_kw_per_k = _building_heat_loss_coeff_kw_per_k(building_standard)
-    delta_t = np.maximum(0.0, INDOOR_SETPOINT_C - outdoor_temp_c.to_numpy())
-    space_heating_kw = ua_kw_per_k * delta_t
-
-    # Trinkwarmwasser als ganzjähriger Sockel mit Tagespeaks
-    dhw_kw = (
-        DHW_BASE_KW
-        + DHW_MORNING_PEAK_KW * np.exp(-0.5 * ((hours - 7) / 1.1) ** 2)
-        + DHW_EVENING_PEAK_KW * np.exp(-0.5 * ((hours - 20) / 1.3) ** 2)
-    )
-
-    heat_kw = np.clip(space_heating_kw + dhw_kw, 5.0, 95.0)
-    heat_kwh_step = heat_kw * dt_h
-    return pd.Series(heat_kwh_step, index=times, name='heat_demand_kwh')
-
-
-def generate_ev_profile(times, resolution: str, ev_mode: str = 'daytime'):
-    """Generiert EV-Ladeprofil [kWh pro Zeitschritt] für gewählten Modus."""
-    hours = times.hour
-    day_of_year = times.dayofyear
-    day_of_week = day_of_year % 7
-
-    ev_kw = np.zeros(len(times))
-    if ev_mode == 'evening':
-        ev_kw = np.where((hours >= 18) & (hours < 22), 7.4, 0.0)
-    elif ev_mode == 'daytime':
-        ev_kw = np.where((hours >= 10) & (hours < 14), 7.4, 0.0)
-    elif ev_mode == 'workplace':
-        is_workday = day_of_week < 5
-        ev_kw = np.where(is_workday & (hours >= 8) & (hours < 17), 3.3, 0.0)
-
-    dt_h = 1.0 if resolution == '1h' else 0.25
-    ev_kwh_step = ev_kw * dt_h
-    return pd.Series(ev_kwh_step, index=times, name='ev_demand_kwh')
-
-
-def build_dataset(resolution: str) -> pd.DataFrame:
-    """Erzeugt vollständigen Datensatz für eine Auflösung ('1h' oder '15min')."""
-    if resolution not in ('1h', '15min'):
-        raise ValueError("resolution muss '1h' oder '15min' sein")
-
-    freq = 'h' if resolution == '1h' else '15min'
-    end_timestamp = f'{YEAR}-12-31 23:00' if resolution == '1h' else f'{YEAR}-12-31 23:45'
+def build_dataset_1h() -> pd.DataFrame:
+    """Erzeugt den 1h-Datensatz mit PV-Leistung und Aussentemperatur."""
     times = pd.date_range(
         f'{YEAR}-01-01',
-        end_timestamp,
-        freq=freq,
-        tz='Europe/Zurich'
+        f'{YEAR}-12-31 23:00',
+        freq='h',
+        tz='Europe/Zurich',
     )
 
-    print(f"\n[INFO] Generiere Zeitreihen mit {resolution} Auflösung...")
-    print(f"[INFO] Zeitraum: {times[0]} bis {times[-1]}")
-    print(f"[INFO] Anzahl Einträge: {len(times)}")
-    print(f"[INFO] Wohnungen: {NUM_APARTMENTS}, PV: {PV_KWP} kWp")
+    print('\n[INFO] Generiere Zeitreihe mit 1h Auflösung...')
+    print(f'[INFO] Zeitraum: {times[0]} bis {times[-1]}')
+    print(f'[INFO] Anzahl Einträge: {len(times)}')
+    print(f'[INFO] PV: {PV_KWP} kWp')
 
-    pv_irradiance = generate_pv_data(times, pv_area_m2=PV_AREA_M2)
-    load_kwh_step = generate_load_profile(times, resolution=resolution, num_apartments=NUM_APARTMENTS)
-    outdoor_temp_c = generate_outdoor_temperature(times)
-    heat_kwh_step = generate_heat_profile(
-        times,
-        resolution=resolution,
-        outdoor_temp_c=outdoor_temp_c,
-        building_standard=BUILDING_STANDARD,
-    )
-    ev_kwh_step = generate_ev_profile(times, resolution=resolution, ev_mode=EV_MODE)
-
-    dt_h = 1.0 if resolution == '1h' else 0.25
-
-    # Leistungsspalten für den bestehenden Simulationskern
-    load_el_kw = load_kwh_step / dt_h
-    load_heat_kw = heat_kwh_step / dt_h
-    ev_demand_kw = ev_kwh_step / dt_h
+    pv_irradiance = generate_pv_data(times)
     pv_kw = np.clip(PV_KWP * (pv_irradiance / 1000.0), 0.0, PV_KWP)
+    outdoor_temp_c = (generate_outdoor_temperature(times))
 
-    df = pd.DataFrame({
+    return pd.DataFrame({
         'datetime': times,
         'pv_kw': pv_kw.values,
-        'load_el_kw': load_el_kw.values,
-        'load_heat_kw': load_heat_kw.values,
-        'ev_demand_kw': ev_demand_kw.values,
         'outdoor_temp_c': outdoor_temp_c.values,
-        # Zusätzliche Transparenz-Spalten
-        'pv_irradiance_wh_m2': pv_irradiance.values,
-        'electricity_consumption_kwh_step': load_kwh_step.values,
-        'heat_demand_kwh_step': heat_kwh_step.values,
-        'ev_demand_kwh_step': ev_kwh_step.values,
     })
+
+
+def main() -> pd.DataFrame:
+    output_dir = Path(__file__).resolve().parent
+    df = build_dataset_1h()
+
+    output_file = output_dir / 'pv_yield_profile.csv'
+    df.to_csv(output_file, index=False)
+
+    print(f'[SUCCESS] CSV erstellt: {output_file}')
+    print('[INFO] Kennzahlen:')
+    print(f"  PV Jahresenergie [MWh]: {(df['pv_kw'].sum()) / 1000:.1f}")
+    print('\nFirst 5 rows:')
+    print(df.head().to_string(index=False))
 
     return df
 
 
-def main():
-    output_dir = Path(__file__).resolve().parent
-    created = {}
-
-    for resolution in OUTPUT_RESOLUTIONS:
-        df = build_dataset(resolution)
-        output_file = output_dir / f'data_anna-heer_{resolution}.csv'
-        df.to_csv(output_file, index=False)
-        created[resolution] = (output_file, df)
-
-        print(f"[SUCCESS] CSV erstellt: {output_file}")
-        print("[INFO] Kennzahlen:")
-        print(f"  PV Jahresenergie [MWh]: {(df['pv_kw'].sum() * (1.0 if resolution == '1h' else 0.25)) / 1000:.1f}")
-        print(f"  Stromverbrauch [MWh]: {(df['load_el_kw'].sum() * (1.0 if resolution == '1h' else 0.25)) / 1000:.1f}")
-        print(f"  Wärmelast [MWh]: {(df['load_heat_kw'].sum() * (1.0 if resolution == '1h' else 0.25)) / 1000:.1f}")
-        print(f"  EV-Ladung [MWh]: {(df['ev_demand_kw'].sum() * (1.0 if resolution == '1h' else 0.25)) / 1000:.1f}")
-
-    print("\nFirst 5 rows (1h):")
-    print(created['1h'][1].head().to_string(index=False))
-
-    return created['1h'][1]
-
-
 if __name__ == '__main__':
-    df = main()
+    main()

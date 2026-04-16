@@ -1,7 +1,7 @@
-"""Einfaches Standardszenario für die Simulation."""
+"""Szenarien für die Strategie-Vergleiche."""
 
 from dataclasses import dataclass
-from typing import Literal
+from typing import Literal, List
 from config import SystemConfig
 
 
@@ -26,38 +26,54 @@ class Scenario:
         return f"Scenario('{self.name}')"
 
 
-
-DEFAULT_SCENARIO = Scenario(
-    name="Referenzszenario",
-    config=SystemConfig(
-        price_buy_chf=0.28,
-        price_sell_chf=0.10,
+SCENARIOS = [
+    Scenario(
+        name="Szenario A",
+        config=SystemConfig(
+            price_buy_chf=0.28,
+            price_sell_chf=0.10,
+        ),
+        ev_profile_mode='as_is',
+        description="Baseline-Szenario mit moderaten Strompreisen.\n\n"
+                   "• Strombezug: 0.28 CHF/kWh\n"
+                   "• Stromeinspeisung: 0.10 CHF/kWh\n"
+                   "• EV-Profil: Über den Tag verteilt\n\n"
+                   "Dieses Szenario dient als Standard zur Vergleichbarkeit."
     ),
-    ev_profile_mode='as_is',
-    description="Einfaches Basisszenario für spätere GUI-Parametrisierung."
-)
+    Scenario(
+        name="Szenario B",
+        config=SystemConfig(
+            price_buy_chf=0.15,
+            price_sell_chf=0.08,
+        ),
+        ev_profile_mode='as_is',
+        description="Szenario mit günstigen Strompreisen.\n\n"
+                   "• Strombezug: 0.15 CHF/kWh (niedrig)\n"
+                   "• Stromeinspeisung: 0.08 CHF/kWh\n"
+                   "• EV-Profil: Über den Tag verteilt\n\n"
+                   "Günstige Preise begünstigen H2-Produktion (Elektrolyse)."
+    ),
+    #TODO ERWEITERBAR ~ Kenny, 16.04.2026
+]
 
 
 class ScenarioManager:
-    """Verwaltet das einzige aktive Standardszenario."""
+    """Verwaltet verfügbare Szenarien."""
     
     @staticmethod
-    def print_available():
-        """Gibt das aktive Standardszenario aus."""
-        print("\n" + "="*70)
-        print("AKTIVES STANDARDSZENARIO")
-        print("="*70)
-
-        scenario = DEFAULT_SCENARIO
-        print(f"\n  {scenario.name}")
-        print(f"    EV-Profilmodus: {scenario.ev_profile_mode}")
-        print(f"    Preis Kauf: {scenario.config.price_buy_chf} CHF/kWh")
-        print(f"    Preis Verkauf: {scenario.config.price_sell_chf} CHF/kWh")
-        if scenario.description:
-            print(f"    {scenario.description}")
-
-        print("\n" + "="*70 + "\n")
-
+    def get_all_scenarios() -> List[Scenario]:
+        """Gibt alle Szenarien zurück."""
+        return SCENARIOS
+    
+    @staticmethod
+    def get_by_name(name: str) -> Scenario:
+        """Gibt Szenario nach Name zurück."""
+        for scenario in SCENARIOS:
+            if scenario.name == name:
+                return scenario
+        raise ValueError(f"Szenario '{name}' nicht gefunden")
+    
     @staticmethod
     def get_default() -> Scenario:
-        return DEFAULT_SCENARIO
+        """Gibt erstes Szenario als Default zurück."""
+        return SCENARIOS[0] if SCENARIOS else None
