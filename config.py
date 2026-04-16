@@ -21,15 +21,18 @@ class SystemConfig:
 
     # H2-Speicher
     h2_tank_volume_m3: float = 85.0
+<<<<<<< HEAD
     h2_pressure_bar: float = 35.0           # (von 3.5 bis max 35 bar)
     h2_temperature_c: float = 15.0
     h2_density_override_kg_m3: Optional[float] = 2.94 # (bei 35 bar und 15°C, sonst Berechnung über ideale Gasgleichung)
     h2_total_mass_override_kg: Optional[float] = 250.0 # (bei 35 bar und 15°C)
     h2_lhv_kwh_per_kg: float = 33.33
     h2_capacity_override_kwh: Optional[float] = 8325.5 # (Fachtsheet H2)
+=======
+
 
     h2_initial_soc: float = 0.05
-    h2_min_soc: float = 0.05
+    h2_min_soc: float = 0.085
 
     # Thermischer Speicher
     thermal_storage_capacity_kwh: float = 600.0
