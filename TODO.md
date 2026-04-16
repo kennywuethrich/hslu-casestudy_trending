@@ -43,6 +43,8 @@ dispatch.py _check_ (weiss aber ned gnau für was die datei esch)
 strategies.py _check_
 simulator.py _check_
 
+Aktuell vergleichen wir die beiden Szenarien, ist aber nicht das Ziel. wir wollen je szenario die Strategien vergleichen... muss noch implementiert werden ~kenny
+
 
 ## 07.05.2026
 
