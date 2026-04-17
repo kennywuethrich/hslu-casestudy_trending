@@ -4,6 +4,7 @@ import customtkinter as ctk
 from tkinter import ttk
 import threading
 import sys
+import pandas as pd
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -22,10 +23,14 @@ class StrategyGUI:
         ctk.set_appearance_mode("dark")
         ctk.set_default_color_theme("blue")
         
+        self.results_dir = Path(__file__).parent.parent / "results"
+        self.selected_result_scenario = None
+        
         # === Main Grid ===
         main = ctk.CTkFrame(root)
         main.pack(fill="both", expand=True, padx=15, pady=15)
         main.grid_rowconfigure(2, weight=1)
+        main.grid_rowconfigure(4, weight=1)
         main.grid_columnconfigure(0, weight=1)
         main.grid_columnconfigure(1, weight=1)
         
@@ -38,7 +43,7 @@ class StrategyGUI:
         lbl_txt = ctk.CTkLabel(title_wrap, text=" Strategie-Vergleich", font=("Segoe UI", 34, "bold"))
 
         lbl_h.grid(row=0, column=0, sticky="n")
-        lbl_2.grid(row=0, column=1, sticky="s", pady=(14, 0))  # nach unten schieben
+        lbl_2.grid(row=0, column=1, sticky="s", pady=(14, 0))
         lbl_txt.grid(row=0, column=2, sticky="n")
         
         # Scenario selection
@@ -57,11 +62,11 @@ class StrategyGUI:
         self.s2_combo.pack(side="left")
         
         # Descriptions (side by side)
-        self.desc1 = ctk.CTkTextbox(main, height=120, width=400)
+        self.desc1 = ctk.CTkTextbox(main, height=100, width=400)
         self.desc1.grid(row=2, column=0, sticky="nsew", padx=(0, 10))
         self.desc1.configure(state="disabled")
         
-        self.desc2 = ctk.CTkTextbox(main, height=120, width=400)
+        self.desc2 = ctk.CTkTextbox(main, height=100, width=400)
         self.desc2.grid(row=2, column=1, sticky="nsew", padx=(10, 0))
         self.desc2.configure(state="disabled")
         
@@ -69,20 +74,45 @@ class StrategyGUI:
         btn_frame = ctk.CTkFrame(main)
         btn_frame.grid(row=3, column=0, columnspan=2, sticky="ew", pady=15)
         
-        self.btn = ctk.CTkButton(btn_frame, text="VERGLEICHEN", command=self._compare, font=("Helvetica", 13))
+        self.btn = ctk.CTkButton(btn_frame, text="SIMULATIONEN STARTEN", command=self._compare, font=("Helvetica", 13))
         self.btn.pack(side="left", padx=(0, 15))
         
         self.status = ctk.CTkLabel(btn_frame, text="Bereit", text_color="gray")
         self.status.pack(side="left")
         
+        # Results section label
+        results_label = ctk.CTkLabel(main, text="ERGEBNISSE", font=("Helvetica", 14, "bold"))
+        results_label.grid(row=4, column=0, columnspan=2, sticky="w", pady=(15, 10))
+        
+        # Results view selector (dropdown to switch between scenarios)
+        view_frame = ctk.CTkFrame(main)
+        view_frame.grid(row=4, column=0, columnspan=2, sticky="e", pady=(15, 10))
+        
+        ctk.CTkLabel(view_frame, text="Anzeige Szenario:", font=("Helvetica", 12)).pack(side="left", padx=(0, 10))
+        self.result_combo = ctk.CTkComboBox(view_frame, values=["Szenario 1", "Szenario 2"], width=200, command=self._load_result_csv)
+        self.result_combo.pack(side="left")
+        
         # Results table
         self.table_frame = ctk.CTkFrame(main)
-        self.table_frame.grid(row=4, column=0, columnspan=2, sticky="nsew", pady=(10, 0))
+        self.table_frame.grid(row=5, column=0, columnspan=2, sticky="nsew", pady=(10, 0))
         self.table_frame.grid_rowconfigure(0, weight=1)
         self.table_frame.grid_columnconfigure(0, weight=1)
         
+        self._show_placeholder()
         self._update_desc1(None)
         self._update_desc2(None)
+    
+    def _show_placeholder(self):
+        """Zeigt Placeholder-Text an."""
+        for w in self.table_frame.winfo_children():
+            w.destroy()
+        
+        placeholder = ctk.CTkLabel(
+            self.table_frame,
+            text="Klicken Sie auf 'SIMULATIONEN STARTEN', um Ergebnisse zu generieren.",
+            text_color="gray"
+        )
+        placeholder.pack(expand=True)
     
     def _update_desc(self, combo, textbox):
         s = ScenarioManager.get_by_name(combo.get())
@@ -99,7 +129,8 @@ class StrategyGUI:
     
     def _compare(self):
         self.btn.configure(state="disabled")
-        self.status.configure(text="⏳ Läuft...", text_color="orange")
+        self.status.configure(text="⏳ Simulationen laufen...", text_color="orange")
+        self._show_placeholder()
         threading.Thread(target=self._worker, daemon=True).start()
     
     def _worker(self):
@@ -107,45 +138,68 @@ class StrategyGUI:
             s1 = ScenarioManager.get_by_name(self.s1_combo.get())
             s2 = ScenarioManager.get_by_name(self.s2_combo.get())
             
-            sim1, sim2 = Simulator(s1), Simulator(s2)
-            sim1.run_all_strategies(sim1.generate_profiles())
-            sim2.run_all_strategies(sim2.generate_profiles())
+            # Simuliere Szenario 1
+            sim1 = Simulator(s1, scenario_number=1)
+            profiles1 = sim1.generate_profiles()
+            sim1.run_all_strategies(profiles1)
             
-            self.root.after(0, self._show, s1.name, s2.name, sim1.get_kpis_summary()[0], sim2.get_kpis_summary()[0])
+            # Simuliere Szenario 2
+            sim2 = Simulator(s2, scenario_number=2)
+            profiles2 = sim2.generate_profiles()
+            sim2.run_all_strategies(profiles2)
+            
+            self.root.after(0, self._on_simulations_complete)
         except Exception as e:
             print(f"Fehler: {e}")
+            import traceback
+            traceback.print_exc()
             self.root.after(0, lambda: self.status.configure(text=f"Fehler: {str(e)[:40]}", text_color="red"))
             self.root.after(0, lambda: self.btn.configure(state="normal"))
     
-    def _show(self, s1_name, s2_name, kpi1, kpi2):
+    def _on_simulations_complete(self):
+        """Wird aufgerufen, wenn Simulationen fertig sind."""
+        self.status.configure(text="✓ Fertig", text_color="green")
+        self.btn.configure(state="normal")
+    
+    def _load_result_csv(self, scenario_display):
+        """Lädt CSV für ausgewähltes Szenario.
+        
+        Args:
+            scenario_display: "Szenario 1" oder "Szenario 2"
+        """
+        # Extrahiere die Nummer aus "Szenario 1" oder "Szenario 2"
+        scenario_number = scenario_display.split()[-1]
+        csv_path = self.results_dir / f"kpis_szenario_{scenario_number}.csv"
+        
+        if not csv_path.exists():
+            self._show_placeholder()
+            return
+        
+        try:
+            df = pd.read_csv(csv_path)
+            self._display_table(df)
+        except Exception as e:
+            print(f"Fehler beim Laden der CSV: {e}")
+            self._show_placeholder()
+    
+    def _display_table(self, df: pd.DataFrame):
+        """Zeigt DataFrame als Tabelle an."""
         for w in self.table_frame.winfo_children():
             w.destroy()
         
-        tree = ttk.Treeview(self.table_frame, columns=("KPI", s1_name, s2_name, "Δ"), height=12)
+        columns = list(df.columns)
+        tree = ttk.Treeview(self.table_frame, columns=columns, height=15)
         tree.column("#0", width=0)
-        tree.column("KPI", width=250, anchor="w")
-        tree.column(s1_name, width=180, anchor="center")
-        tree.column(s2_name, width=180, anchor="center")
-        tree.column("Δ", width=100, anchor="center")
         
-        tree.heading("KPI", text="KPI", anchor="w")
-        tree.heading(s1_name, text=s1_name, anchor="center")
-        tree.heading(s2_name, text=s2_name, anchor="center")
-        tree.heading("Δ", text="Differenz", anchor="center")
+        for col in columns:
+            tree.column(col, width=200, anchor="center")
+            tree.heading(col, text=col, anchor="center")
         
-        for key in kpi1.keys():
-            if key == "label":
-                continue
-            v1, v2 = kpi1.get(key, "-"), kpi2.get(key, "-")
-            try:
-                delta = f"{float(v2) - float(v1):+.1f}"
-            except:
-                delta = "-"
-            tree.insert("", "end", values=(key, v1, v2, delta))
+        for idx, row in df.iterrows():
+            values = [row[col] for col in columns]
+            tree.insert("", "end", values=values)
         
         tree.pack(fill="both", expand=True)
-        self.status.configure(text="✓ Fertig", text_color="green")
-        self.btn.configure(state="normal")
 
 
 def launch():

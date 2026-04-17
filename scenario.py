@@ -54,6 +54,7 @@ SCENARIOS = [
                    "Günstige Preise begünstigen H2-Produktion (Elektrolyse)."
     ),
     #TODO ERWEITERBAR ~ Kenny, 16.04.2026
+    # E-Autos werden von Pierre abgeklärt. maybe auch mit verschiedenen Fahrzeugtypen (Plugin Hybrid, hybrid, Vollelektro) und verschiedene Szenarien. Auto schon vorheizen im Winter, Batterie schon aufwärmen, damit der Wirkungsgrad des Autos besser ist (Strom aus dem Haus ist günstiger als Batterie-Strom des E-Autos.)
 ]
 
 

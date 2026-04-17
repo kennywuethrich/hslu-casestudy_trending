@@ -81,6 +81,31 @@ def save_kpis_to_csv(kpi_list: List[Dict], filepath: str = "kpi_ergebnisse.csv")
     print(f"  ✓ KPI-Ergebnisse gespeichert: {resolved_path}")
 
 
+def save_kpis_by_scenario(scenario_number: int, kpi_base: Dict, kpi_optimized: Dict):
+    """Speichert KPIs für ein Szenario als CSV mit beiden Strategien.
+    
+    Args:
+        scenario_number: Nummer des Szenarios (1 oder 2)
+        kpi_base: KPI-Dict für BaseStrategy
+        kpi_optimized: KPI-Dict für OptimizedStrategy
+    """
+    output_dir = "results"
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # Dateiname basierend auf Szenario-Nummer
+    filepath = os.path.join(output_dir, f"kpis_szenario_{scenario_number}.csv")
+    
+    # DataFrame mit beiden Strategien
+    data = {
+        'KPI': [k for k in kpi_base.keys() if k != 'label'],
+        'BaseStrategy': [kpi_base.get(k, '-') for k in kpi_base.keys() if k != 'label'],
+        'OptimizedStrategy': [kpi_optimized.get(k, '-') for k in kpi_optimized.keys() if k != 'label']
+    }
+    kpi_df = pd.DataFrame(data)
+    kpi_df.to_csv(filepath, index=False)
+    print(f"  ✓ Szenario-KPIs gespeichert: {filepath}")
+
+
 if __name__ == "__main__":
     from profiles import ProfileGenerator
     

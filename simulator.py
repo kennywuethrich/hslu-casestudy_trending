@@ -27,14 +27,16 @@ class Simulator:
     - Visualisierung
     """
     
-    def __init__(self, scenario: Scenario):
+    def __init__(self, scenario: Scenario, scenario_number: int = None):
         """
         Initialisiert Simulator mit Szenario.
         
         Args:
             scenario: Scenario Objekt mit Config
+            scenario_number: Nummer des Szenarios in der Simulation (1 oder 2)
         """
         self.scenario = scenario
+        self.scenario_number = scenario_number
         self.config = scenario.config
         self.results = {}  
         self.output_dir = "results"
@@ -109,6 +111,18 @@ class Simulator:
         
         for strategy in strategies:
             self.run_strategy(strategy, profiles)
+        
+        # Speichere KPIs als CSV
+        self._save_scenario_kpis()
+    
+    def _save_scenario_kpis(self):
+        """Speichert KPIs des Szenarios als CSV."""
+        from analyzer import save_kpis_by_scenario
+        
+        if len(self.results) >= 2 and self.scenario_number:
+            kpi_base = list(self.results.values())[0]['kpis']
+            kpi_optimized = list(self.results.values())[1]['kpis']
+            save_kpis_by_scenario(self.scenario_number, kpi_base, kpi_optimized)
     
     def get_kpis_summary(self) -> List[Dict]:
         """
