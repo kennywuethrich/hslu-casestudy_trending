@@ -78,3 +78,9 @@ class ScenarioManager:
     def get_default() -> Scenario:
         """Gibt erstes Szenario als Default zurück."""
         return SCENARIOS[0] if SCENARIOS else None
+
+
+if __name__ == '__main__':
+    print(f"Total scenarios: {len(ScenarioManager.get_all_scenarios())}")
+    print(f"Default: {ScenarioManager.get_default()}")
+    print(f"Scenario A: {ScenarioManager.get_by_name('Szenario A').config.price_buy_chf} CHF/kWh")

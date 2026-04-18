@@ -134,3 +134,11 @@ class OptimizedStrategy(Strategy):
         
         return callback
 
+
+if __name__ == '__main__':
+    config = SystemConfig(price_buy_chf=0.28, price_sell_chf=0.10)
+    base = BaseStrategy(config)
+    optimized = OptimizedStrategy(config)
+    print(f"Base: {base}")
+    print(f"Optimized: {optimized}")
+

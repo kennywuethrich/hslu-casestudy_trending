@@ -57,6 +57,8 @@ def load_profiles(config: SystemConfig, ev_mode: str = 'as_is') -> pd.DataFrame:
         'co2_intensity': config.co2_grid_kg_kwh,
         'dt_h': 1.0
     })
+
+
 if __name__ == "__main__":
     config = SystemConfig()
     profiles = load_profiles(config)

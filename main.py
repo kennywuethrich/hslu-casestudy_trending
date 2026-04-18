@@ -3,6 +3,7 @@
 from scenario import ScenarioManager
 from simulator import Simulator
 
+# Keine Funktion mehr. Wir starten über .\gui\gui_main.py
 
 def main():
     """Führt das einzige aktive Standardszenario aus."""
@@ -22,5 +23,6 @@ def main():
     
     print("\n✓ Simulation abgeschlossen!")
     print("="*80 + "\n")
+    
 if __name__ == "__main__":
     main()
