@@ -1,7 +1,9 @@
 """Haupteinstieg für das Standardszenario."""
 
+
 from scenario import ScenarioManager
 from simulator import Simulator
+from plots import plot_h2_soc
 
 # Keine Funktion mehr. Wir starten über .\gui\gui_main.py
 
@@ -19,7 +21,15 @@ def main():
 
     simulator.run_all_strategies(profiles)
     simulator.print_results(include_plots=True)
-    simulator.analyzer.save_kpis_to_csv(simulator.get_kpis_summary())
+
+    # H2-Füllstand für jede Strategie plotten
+    for strat_key, result in simulator.results.items():
+        df = result['result_df']
+        cap = simulator.config.h2_capacity_kwh
+        plot_h2_soc(df, title=f"H2-Füllstand – {strat_key}", capacity_kwh=cap)
+
+    # KPIs speichern
+    # simulator.analyzer.save_kpis_to_csv(simulator.get_kpis_summary())
     
     print("\n✓ Simulation abgeschlossen!")
     print("="*80 + "\n")

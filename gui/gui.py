@@ -6,6 +6,9 @@ import threading
 import sys
 import pandas as pd
 from pathlib import Path
+import os 
+import matplotlib.pyplot as plt
+from plots import plot_h2_soc
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -148,7 +151,7 @@ class StrategyGUI:
             profiles2 = sim2.generate_profiles()
             sim2.run_all_strategies(profiles2)
             
-            self.root.after(0, self._on_simulations_complete)
+            self.root.after(0, lambda: self._on_simulations_complete(sim1,sim2))
         except Exception as e:
             print(f"Fehler: {e}")
             import traceback
@@ -156,10 +159,35 @@ class StrategyGUI:
             self.root.after(0, lambda: self.status.configure(text=f"Fehler: {str(e)[:40]}", text_color="red"))
             self.root.after(0, lambda: self.btn.configure(state="normal"))
     
-    def _on_simulations_complete(self):
+    def _on_simulations_complete(self, sim1, sim2):
         """Wird aufgerufen, wenn Simulationen fertig sind."""
         self.status.configure(text="✓ Fertig", text_color="green")
         self.btn.configure(state="normal")
+
+        # 1. Plots für beide Simulatoren speichern
+        for sim in [sim1, sim2]:
+            for strat_key, result in sim.results.items():
+                df = result['result_df']
+                cap = sim.config.h2_capacity_kwh
+            
+            # Dateiname zusammenbauen
+                scenario_name = sim.scenario.name.replace(" ", "_")
+                file_name = f"plot_{scenario_name}_{strat_key}.png"
+                save_path = self.results_dir / file_name
+            
+            # Deine Funktion aus plots.py nutzen
+                plot_h2_soc(
+                    df, 
+                    title=f"H2-Füllstand – {sim.scenario.name} ({strat_key})", 
+                    save_path=str(save_path), 
+                    capacity_kwh=cap
+                )
+    
+    # 2. Ergebnisse in der Tabelle anzeigen
+        self._load_result_csv("Szenario 1")
+    
+        # Danach die Tabelle laden wie bisher
+        self._load_result_csv("Szenario 1")
     
     def _load_result_csv(self, scenario_display):
         """Lädt CSV für ausgewähltes Szenario.
@@ -200,6 +228,10 @@ class StrategyGUI:
             tree.insert("", "end", values=values)
         
         tree.pack(fill="both", expand=True)
+
+    
+    
+    
 
 
 def launch():
