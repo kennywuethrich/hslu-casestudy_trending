@@ -1,7 +1,7 @@
 # TODO Trending
 config: überprüfen der Daten (Datenblätter teams) [Felix] _erledigt_
 
-allgemein: wieso 35 % auslastung in H2 [Nick] 
+allgemein: wieso 35 % auslastung in H2 [Nick] _check_
 
 
 Strategy: heurastic mit casadi ersetzen [Kenny]
@@ -18,10 +18,10 @@ in scenario.py
 ## 16.04.2026:
 
 - [ ] Strompreise als API (bei EKZ) [Felix]
-- [ ] Daten updaten. [Nick]
+- [ ] Daten updaten. [Nick] _check_
 - [ ] config.py kann eventuell auch noch angepasst werden. Berechnung der H2-Zelle muss nicht dort drin sein.
 - [ ] profiles.py kann noch angepasst werden. EV-Berechnung muss nicht dort sein. ev. in components.py verschieben...?
-- [ ] plots.py muss noch erstellt werden. 
+- [ ] plots.py muss noch erstellt werden. <-- erste Probe gemacht 
 
 GUI: 
 
