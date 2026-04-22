@@ -29,16 +29,14 @@ class Scenario:
 SCENARIOS = [
     Scenario(
         name="Szenario A",
-        config=SystemConfig(
-            price_buy_chf=0.28,
-            price_sell_chf=0.10,
-        ),
+        config=SystemConfig(),  # Preise werden automatisch von der API abgerufen
         ev_profile_mode='as_is',
-        description="Baseline-Szenario mit moderaten Strompreisen.\n\n"
-                   "• Strombezug: 0.28 CHF/kWh\n"
-                   "• Stromeinspeisung: 0.10 CHF/kWh\n"
-                   "• EV-Profil: Über den Tag verteilt\n\n"
-                   "Dieses Szenario dient als Standard zur Vergleichbarkeit."
+        description=f"Baseline-Szenario mit aktuellen Strompreisen (von EKZ API).\n\n"
+                   f"• Strombezug: {SystemConfig().price_buy_chf:.4f} CHF/kWh\n"
+                   f"• Stromverkauf: {SystemConfig().price_sell_chf:.4f} CHF/kWh\n"
+                   f"• EV-Profil: Über den Tag verteilt\n\n"
+                   f"Dieses Szenario dient als Standard zur Vergleichbarkeit." 
+
     ),
     Scenario(
         name="Szenario B",
