@@ -34,11 +34,13 @@ Pipfile.lock
 # IDE
 .vscode/
 .idea/
+.github/
 *.swp
 *.swo
 *~
 .DS_Store
 .venv
+.pylintrc
 
 
 # Jupyter Notebook
