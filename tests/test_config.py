@@ -30,3 +30,13 @@ def test_invalid_dispatch_limit_raises_assertion() -> None:
 
     with pytest.raises(AssertionError):
         SystemConfig(fc_kw_max=10.0, fc_dispatch_max_kw=12.0)
+
+
+def test_system_config_smoke() -> None:
+    """Prueft, dass eine SystemConfig sauber erzeugt werden kann."""
+
+    config = SystemConfig()
+
+    assert config.price_buy_chf > 0.0
+    assert config.price_sell_chf > 0.0
+    assert config.h2_capacity_kwh > 0.0

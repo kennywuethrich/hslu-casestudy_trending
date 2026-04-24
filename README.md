@@ -143,9 +143,3 @@ pytest
 
 Hinweis: In Tests wird der API-Preisabruf in der Regel deaktiviert,
 damit die Tests reproduzierbar offline laufen.
-
-## Komponenten-Modul
-
-`components.py` enthält Einzelkomponenten-Klassen (`Electrolyzer`,
-`FuelCell`, `HeatPump`). Der aktuelle Hauptpfad für die Simulation nutzt
-die integrierte Rechenlogik in `physics_model.py`.
