@@ -19,7 +19,10 @@ from plots import plot_h2_soc
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from scenario import ScenarioManager
-from simulator import Simulator
+from simulator import simulate
+from profiles import load_profiles
+from strategies import BaseStrategy, OptimizedStrategy
+from analyzer import calculate_kpis, save_kpis_by_scenario
 
 
 class _LogQueueWriter:
@@ -84,26 +87,47 @@ def _run_simulations_in_process(
             scenario_1 = ScenarioManager.get_by_name(scenario_1_name)
             scenario_2 = ScenarioManager.get_by_name(scenario_2_name)
 
-            simulations = [
-                (Simulator(scenario_1, scenario_number=1), "1"),
-                (Simulator(scenario_2, scenario_number=2), "2"),
-            ]
+            simulations = [(scenario_1, 1), (scenario_2, 2)]
 
-            for sim, label in simulations:
-                print(f"Starte Berechnung für Szenario {label}...")
-                profiles = sim.generate_profiles()
-                sim.run_all_strategies(profiles)
+            for scenario, scenario_number in simulations:
+                print(f"Starte Berechnung für Szenario {scenario_number}...")
 
-                print(f"Erzeuge Plots für Szenario {label}...")
-                for strat_key, result in sim.results.items():
-                    result_df = result["result_df"]
-                    capacity_kwh = sim.config.h2_capacity_kwh
-                    scenario_name = sim.scenario.name.replace(" ", "_")
+                profiles_df = load_profiles(scenario.config)
+                base_strategy = BaseStrategy(scenario.config)
+                optimized_strategy = OptimizedStrategy(scenario.config)
+
+                result_base = simulate(profiles_df, scenario.config, base_strategy)
+                result_optimized = simulate(
+                    profiles_df,
+                    scenario.config,
+                    optimized_strategy,
+                )
+
+                kpi_base = calculate_kpis(
+                    result_base,
+                    scenario.config,
+                    label="BaseStrategy",
+                )
+                kpi_optimized = calculate_kpis(
+                    result_optimized,
+                    scenario.config,
+                    label="OptimizedStrategy",
+                )
+                save_kpis_by_scenario(scenario_number, kpi_base, kpi_optimized)
+
+                print(f"Erzeuge Plots für Szenario {scenario_number}...")
+                strategy_results = {
+                    "BaseStrategy": result_base,
+                    "OptimizedStrategy": result_optimized,
+                }
+                for strat_key, result_df in strategy_results.items():
+                    capacity_kwh = scenario.config.h2_capacity_kwh
+                    scenario_name = scenario.name.replace(" ", "_")
                     file_name = f"plot_{scenario_name}_{strat_key}.png"
                     save_path = results_dir / file_name
                     plot_h2_soc(
                         result_df,
-                        title=f"H2-Füllstand – {sim.scenario.name} ({strat_key})",
+                        title=f"H2-Füllstand – {scenario.name} ({strat_key})",
                         save_path=str(save_path),
                         capacity_kwh=capacity_kwh,
                     )

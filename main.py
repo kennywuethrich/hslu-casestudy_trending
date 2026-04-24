@@ -1,35 +1,59 @@
 """Haupteinstieg für das Standardszenario."""
 
 from scenario import ScenarioManager
-from simulator import Simulator
+from simulator import simulate
+from profiles import load_profiles
+from strategies import BaseStrategy, OptimizedStrategy
+from analyzer import calculate_kpis, print_kpi_table
 from plots import plot_h2_soc
-
-# Keine Funktion mehr. Wir starten über .\gui\gui_main.py
 
 
 def main():
-    """Führt das einzige aktive Standardszenario aus."""
+    """Führt die Simulation für das Standardszenario aus."""
     print("\n" + "=" * 80)
     print(" " * 20 + "H2-MICROGRID ENERGIESYSTEM SIMULATION")
     print("=" * 80)
 
-    ScenarioManager.print_available()
-
+    # Szenario laden
     scenario = ScenarioManager.get_default()
-    simulator = Simulator(scenario)
-    profiles = simulator.generate_profiles(hours=8760)
+    print(f"\n✓ Szenario: {scenario.name}")
+    print(f"  {scenario.description}\n")
 
-    simulator.run_all_strategies(profiles)
-    simulator.print_results(include_plots=True)
+    # Profile laden
+    profiles_df = load_profiles(scenario.config)
+    print(f"✓ Profile geladen: {len(profiles_df)} Zeitschritte")
 
-    # H2-Füllstand für jede Strategie plotten
-    for strat_key, result in simulator.results.items():
-        df = result["result_df"]
-        cap = simulator.config.h2_capacity_kwh
-        plot_h2_soc(df, title=f"H2-Füllstand – {strat_key}", capacity_kwh=cap)
+    # Simulationen mit beiden Strategien
+    base_strategy = BaseStrategy(scenario.config)
+    optimized_strategy = OptimizedStrategy(scenario.config)
 
-    # KPIs speichern
-    # simulator.analyzer.save_kpis_to_csv(simulator.get_kpis_summary())
+    print(f"\n→ Starte BaseStrategy...")
+    result_base = simulate(profiles_df, scenario.config, base_strategy)
+
+    print(f"→ Starte OptimizedStrategy...")
+    result_optimized = simulate(profiles_df, scenario.config, optimized_strategy)
+
+    # KPIs berechnen
+    kpi_base = calculate_kpis(result_base, scenario.config, label="BaseStrategy")
+    kpi_optimized = calculate_kpis(
+        result_optimized, scenario.config, label="OptimizedStrategy"
+    )
+
+    # Ergebnisse ausgeben
+    print_kpi_table([kpi_base, kpi_optimized])
+
+    # H2-Füllstand plotten
+    print("→ Generiere Plots...")
+    plot_h2_soc(
+        result_base,
+        title=f"H2-Füllstand – BaseStrategy",
+        capacity_kwh=scenario.config.h2_capacity_kwh,
+    )
+    plot_h2_soc(
+        result_optimized,
+        title=f"H2-Füllstand – OptimizedStrategy",
+        capacity_kwh=scenario.config.h2_capacity_kwh,
+    )
 
     print("\n✓ Simulation abgeschlossen!")
     print("=" * 80 + "\n")
