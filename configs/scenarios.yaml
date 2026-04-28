@@ -1,0 +1,22 @@
+# Beispiel für Szenarien-Konfiguration (YAML)
+- name: Szenario A
+  price_buy_chf: 0.28
+  price_sell_chf: 0.10
+  ev_profile_mode: as_is
+  description: |
+    Baseline-Szenario mit moderaten Strompreisen.
+    • Strombezug: 0.28 CHF/kWh
+    • Stromeinspeisung: 0.10 CHF/kWh
+    • EV-Profil: Über den Tag verteilt
+    Dieses Szenario dient als Standard zur Vergleichbarkeit.
+
+- name: Szenario B
+  price_buy_chf: 0.15
+  price_sell_chf: 0.08
+  ev_profile_mode: as_is
+  description: |
+    Szenario mit günstigen Strompreisen.
+    • Strombezug: 0.15 CHF/kWh (niedrig)
+    • Stromeinspeisung: 0.08 CHF/kWh
+    • EV-Profil: Über den Tag verteilt
+    Günstige Preise begünstigen H2-Produktion (Elektrolyse).
