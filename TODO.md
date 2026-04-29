@@ -39,7 +39,7 @@ simulator.py _check_
 Aktuell vergleichen wir die beiden Szenarien, ist aber nicht das Ziel. wir wollen je szenario die Strategien vergleichen... muss noch implementiert werden ~kenny <-- Habe ich umgebaut. aktuell vergleichen wir die beiden Strategien pro 
 
 ## 23.04.2026
-- config.py entkoppeln, damit die API-Abfrage nicht mehr im Konstruktor läuft und keine Seiteneffekte bei jedem Import entstehen.
+- config.py entkoppeln, damit die API-Abfrage nicht mehr im Konstruktor läuft und keine Seiteneffekte bei jedem Import entstehen._check_
 - scenario.py und simulator.py bereinigen, damit Szenarien, Strategien und Ergebnisobjekte klarer getrennt sind._check_
 - Ein kleines Verifikations-Setup ergänzen, damit Pylint, Tests und eventuell ein einfacher Smoke-Test regelmäßig laufen _check_
 
