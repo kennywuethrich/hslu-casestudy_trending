@@ -86,6 +86,11 @@ def _run_simulations_in_process(
 
             scenario_1 = ScenarioManager.get_by_name(scenario_1_name)
             scenario_2 = ScenarioManager.get_by_name(scenario_2_name)
+            
+            # Optional: Versuche, aktuelle Strompreise zu laden
+            print("→ Lade aktuelle Strompreise...")
+            scenario_1.config.fetch_price_from_api()
+            scenario_2.config.fetch_price_from_api()
 
             simulations = [(scenario_1, 1), (scenario_2, 2)]
 
