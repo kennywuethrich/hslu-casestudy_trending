@@ -14,7 +14,7 @@ from typing import Any
 import customtkinter as ctk
 import pandas as pd
 
-from plots import plot_h2_soc
+from plots import plot_consumption_averages_comparison, plot_h2_soc_comparison
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -116,21 +116,29 @@ def _run_simulations_in_process(
                 save_kpis_by_scenario(scenario_number, kpi_base, kpi_optimized)
 
                 print(f"Erzeuge Plots für Szenario {scenario_number}...")
-                strategy_results = {
-                    "BaseStrategy": result_base,
-                    "OptimizedStrategy": result_optimized,
-                }
-                for strat_key, result_df in strategy_results.items():
-                    capacity_kwh = scenario.config.h2_capacity_kwh
-                    scenario_name = scenario.name.replace(" ", "_")
-                    file_name = f"plot_{scenario_name}_{strat_key}.png"
-                    save_path = results_dir / file_name
-                    plot_h2_soc(
-                        result_df,
-                        title=f"H2-Füllstand – {scenario.name} ({strat_key})",
-                        save_path=str(save_path),
-                        capacity_kwh=capacity_kwh,
-                    )
+                capacity_kwh = scenario.config.h2_capacity_kwh
+                scenario_name = scenario.name.replace(" ", "_")
+
+                h2_file_name = f"plot_{scenario_name}_vergleich_h2.png"
+                h2_save_path = results_dir / h2_file_name
+                plot_h2_soc_comparison(
+                    result_base,
+                    result_optimized,
+                    title=f"H2-Füllstand – {scenario.name} (Vergleich)",
+                    save_path=str(h2_save_path),
+                    capacity_kwh=capacity_kwh,
+                )
+
+                consumption_file_name = (
+                    f"plot_stromkonsum_{scenario_name}_vergleich.png"
+                )
+                consumption_save_path = results_dir / consumption_file_name
+                plot_consumption_averages_comparison(
+                    result_base,
+                    result_optimized,
+                    title=f"Stromkonsum-Mittelwerte – {scenario.name} (Vergleich)",
+                    save_path=str(consumption_save_path),
+                )
 
             print("Simulationen abgeschlossen.")
 

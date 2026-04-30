@@ -5,7 +5,7 @@ from simulator import simulate
 from profiles import load_profiles
 from strategies import BaseStrategy, OptimizedStrategy
 from analyzer import calculate_kpis, print_kpi_table
-from plots import plot_h2_soc
+from plots import plot_consumption_averages_comparison, plot_h2_soc_comparison
 
 
 def main():
@@ -44,15 +44,16 @@ def main():
 
     # H2-Füllstand plotten
     print("→ Generiere Plots...")
-    plot_h2_soc(
+    plot_h2_soc_comparison(
         result_base,
-        title=f"H2-Füllstand – BaseStrategy",
+        result_optimized,
+        title="H2-Füllstand – Base vs Optimized",
         capacity_kwh=scenario.config.h2_capacity_kwh,
     )
-    plot_h2_soc(
+    plot_consumption_averages_comparison(
+        result_base,
         result_optimized,
-        title=f"H2-Füllstand – OptimizedStrategy",
-        capacity_kwh=scenario.config.h2_capacity_kwh,
+        title="Stromkonsum-Mittelwerte – Base vs Optimized",
     )
 
     print("\n✓ Simulation abgeschlossen!")
