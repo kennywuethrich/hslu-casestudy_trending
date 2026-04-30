@@ -9,10 +9,11 @@
 #   BaseStrategy      → Einfache Wenn-Dann Regeln
 #   OptimizedStrategy → Preisoptimierte Erweiterung von BaseStrategy
 
+from typing import Optional
+
 import pandas as pd
 from config import SystemConfig
 from physics_model import SystemState, Decision
-
 
 # ---------------------------------------------------------------------------
 # BaseStrategy — regelbasiert, einfache Wenn-Dann Logik
@@ -37,7 +38,12 @@ class BaseStrategy:
         # Maximale H₂-Masse für SOC-Berechnung
         self.h2_max_mass_kg = config.h2_total_mass_kg
 
-    def decide(self, state: SystemState, profile_t: pd.Series) -> Decision:
+    def decide(
+        self,
+        state: SystemState,
+        profile_t: pd.Series,
+        forecast_t: Optional[pd.DataFrame] = None,
+    ) -> Decision:
         """
         Trifft Steuerungsentscheidung für diesen Zeitschritt.
 
@@ -171,20 +177,35 @@ class BaseStrategy:
 
 class OptimizedStrategy(BaseStrategy):
     """
-    Preisoptimierte Steuerung — erweitert die Basisstrategie.
+    Vereinfachte optimierte Steuerung — fokussiert auf Smart Charging.
 
-    Zusätzliche Logik:
-      - Elektrolyseur: Auch bei günstigem Strompreis einschalten ("günstigen Strom einlagern")
-      - Brennstoffzelle: H₂-Puffer proaktiv abbauen wenn Speicher zu voll
-      - Wärmepumpe: Thermischen Speicher bei PV-Überschuss vorladen
-      - EV: Smart Charging — nur laden wenn Preis günstig oder Akku fast leer
+    Problem der ursprünglichen OptimizedStrategy:
+      - H2-Speicherverluste sind zu hoch (76% Hin-Rückweg)
+      - WP-Vorladen rentiert sich nicht mit aktuellem Preisgefüge
+      - Aggressive Speicherung führt zu höheren Kosten, nicht niedrigeren
+
+    Neue Ansatz:
+      - Elektrolyseur: nur PV-Überschuss (wie BaseStrategy)
+      - Brennstoffzelle: wie BaseStrategy (kein proaktives Entladen)
+      - Wärmepumpe: nur Wärmebedarf decken (kein aggressives Vorladen)
+      - EV: Smart Charging - nur laden bei günstigem Preis oder Notfall
     """
 
-    PRICE_THRESHOLD_CHEAP = 0.20  # CHF/kWh — "günstiger" Strom
-    THERMAL_SOC_TARGET = 0.80  # Thermischen Speicher bis 80% vorladen
+    PRICE_THRESHOLD_CHEAP = 0.20  # CHF/kWh — "günstiger" Strom für EV
 
-    def decide(self, state: SystemState, profile_t: pd.Series) -> Decision:
-        """Wie BaseStrategy, aber mit preisoptimierten Überschreibungen."""
+    def decide(
+        self,
+        state: SystemState,
+        profile_t: pd.Series,
+        forecast_t: Optional[pd.DataFrame] = None,
+    ) -> Decision:
+        """
+        Kleine MPC-artige Logik mit 24h-Vorschau.
+
+        Die Forecast-Sicht wird vor allem für die Brennstoffzelle genutzt,
+        damit wir bei Bedarf jetzt entladen und später mit PV wieder füllen
+        können.
+        """
 
         # Eingangsdaten lesen
         pv_kw = float(profile_t["pv_kw"])
@@ -197,13 +218,21 @@ class OptimizedStrategy(BaseStrategy):
         h2_soc = state.h2_mass_kg / self.h2_max_mass_kg
         thermal_soc = state.thermal_soc_kwh / self.config.thermal_storage_capacity_kwh
         ev_soc_frac = state.ev_soc_kwh / self.config.ev_capacity_kwh
+
         pv_surplus_kw = pv_kw - load_el_kw
 
-        P_ely_kw = self._decide_electrolyzer_opt(pv_surplus_kw, h2_soc, price_buy)
-        P_fc_kw = self._decide_fuel_cell_opt(pv_surplus_kw, h2_soc, price_buy)
-        P_hp_kw = self._decide_heat_pump_opt(
-            load_heat_kw, outdoor_temp_c, pv_surplus_kw, thermal_soc
+        # Basisregel für PV-Nutzung und Wärmebedarf
+        P_ely_kw = self._decide_electrolyzer(pv_surplus_kw, h2_soc)
+        P_fc_kw = self._decide_fuel_cell_opt(
+            pv_surplus_kw,
+            h2_soc,
+            price_buy,
+            thermal_soc,
+            forecast_t,
         )
+        P_hp_kw = self._decide_heat_pump(load_heat_kw, outdoor_temp_c)
+
+        # EV bleibt einfach und robust
         P_ev_charge_kw = self._decide_ev_opt(ev_driven_kwh, ev_soc_frac, price_buy)
 
         return Decision(
@@ -212,82 +241,6 @@ class OptimizedStrategy(BaseStrategy):
             P_hp_kw=P_hp_kw,
             P_ev_charge_kw=P_ev_charge_kw,
         )
-
-    def _decide_electrolyzer_opt(
-        self, pv_surplus_kw: float, h2_soc: float, price_buy: float
-    ) -> float:
-        """
-        Wie BaseStrategy, aber zusätzlich: Einschalten wenn Strom günstig ist.
-
-        Zusatzregel:
-          WENN Preis < 0.20 CHF/kWh UND Speicher nicht voll
-          DANN Elektrolyseur mit Maxlast betreiben ("günstigen Strom einlagern")
-        """
-        # Erst Basisregel prüfen
-        base = self._decide_electrolyzer(pv_surplus_kw, h2_soc)
-        if base > 0.0:
-            return base
-
-        # Zusatz: Günstiger Strom verfügbar?
-        if h2_soc >= self.H2_SOC_FULL:
-            return 0.0  # Speicher voll → kein Einlagern möglich
-
-        if price_buy < self.PRICE_THRESHOLD_CHEAP:
-            return self.config.ely_kw_max  # Volle Last bei günstigem Preis
-
-        return 0.0
-
-    def _decide_fuel_cell_opt(
-        self, pv_surplus_kw: float, h2_soc: float, price_buy: float
-    ) -> float:
-        """
-        Wie BaseStrategy, aber zusätzlich: H₂-Puffer proaktiv abbauen.
-
-        Zusatzregel:
-          WENN h2_soc > fc_reserve_soc_target
-          DANN FC mit halber Last betreiben (Platz für nächsten PV-Tag schaffen)
-        """
-        base = self._decide_fuel_cell(pv_surplus_kw, h2_soc, price_buy)
-        if base > 0.0:
-            return base
-
-        # Speicher zu voll → proaktiv entladen
-        if (
-            h2_soc > self.config.fc_reserve_soc_target
-            and h2_soc > self.config.h2_min_soc
-        ):
-            return self.config.fc_dispatch_max_kw * 0.5
-
-        return 0.0
-
-    def _decide_heat_pump_opt(
-        self,
-        load_heat_kw: float,
-        outdoor_temp_c: float,
-        pv_surplus_kw: float,
-        thermal_soc: float,
-    ) -> float:
-        """
-        Wie BaseStrategy, aber zusätzlich: Thermischen Speicher bei PV-Überschuss vorladen.
-
-        Zusatzregel:
-          WENN PV-Überschuss > 0 UND thermischer Speicher-SOC < 80%
-          DANN WP mit Überschuss betreiben um Speicher zu laden
-        """
-        base = self._decide_heat_pump(load_heat_kw, outdoor_temp_c)
-
-        # Speicher vorladen wenn PV-Überschuss und Platz vorhanden?
-        if (
-            pv_surplus_kw > 0.0
-            and thermal_soc < self.THERMAL_SOC_TARGET
-            and outdoor_temp_c >= self.HP_MIN_TEMP_C
-        ):
-            p_el_extra_kw = min(
-                pv_surplus_kw, self.config.hp_kw_th_max / self.config.hp_cop
-            )
-            return max(base, p_el_extra_kw)
-
-        return base
 
     def _decide_ev_opt(
         self, ev_driven_kwh: float, ev_soc_frac: float, price_buy: float
@@ -314,3 +267,60 @@ class OptimizedStrategy(BaseStrategy):
             return p_charge_kw
 
         return 0.0  # Warten auf günstigeren Zeitpunkt
+
+    def _summarize_forecast(self, forecast_t: Optional[pd.DataFrame]) -> dict:
+        """Fasst ein 24h-Fenster zu einfachen Energiesummen zusammen."""
+        if forecast_t is None or len(forecast_t) <= 1:
+            return {
+                "future_pv_surplus_kwh": 0.0,
+                "future_el_deficit_kwh": 0.0,
+                "future_heat_load_kwh": 0.0,
+            }
+
+        future_t = forecast_t.iloc[1:]
+        future_pv_surplus_kwh = (
+            (future_t["pv_kw"] - future_t["load_el_kw"]).clip(lower=0.0).sum()
+        )
+        future_el_deficit_kwh = (
+            (future_t["load_el_kw"] - future_t["pv_kw"]).clip(lower=0.0).sum()
+        )
+        future_heat_load_kwh = future_t["load_heat_kw"].sum()
+
+        return {
+            "future_pv_surplus_kwh": float(future_pv_surplus_kwh),
+            "future_el_deficit_kwh": float(future_el_deficit_kwh),
+            "future_heat_load_kwh": float(future_heat_load_kwh),
+        }
+
+    def _decide_fuel_cell_opt(
+        self,
+        pv_surplus_kw: float,
+        h2_soc: float,
+        price_buy: float,
+        thermal_soc: float,
+        forecast_t: Optional[pd.DataFrame],
+    ) -> float:
+        """Entscheidet die Brennstoffzelle mit 24h-Forecast."""
+        base = self._decide_fuel_cell(pv_surplus_kw, h2_soc, price_buy)
+        if base > 0.0:
+            return base
+
+        deficit_kw = -pv_surplus_kw
+        if deficit_kw <= 0.0 or h2_soc <= self.config.h2_min_soc:
+            return 0.0
+
+        forecast = self._summarize_forecast(forecast_t)
+        future_pv_surplus_kwh = forecast["future_pv_surplus_kwh"]
+        future_el_deficit_kwh = forecast["future_el_deficit_kwh"]
+        future_heat_load_kwh = forecast["future_heat_load_kwh"]
+
+        thermal_buffer_need = (
+            future_heat_load_kwh > 0.35 * self.config.thermal_storage_capacity_kwh
+            and thermal_soc < 0.85
+        )
+        pv_recovery_expected = future_pv_surplus_kwh >= future_el_deficit_kwh
+
+        if thermal_buffer_need or pv_recovery_expected:
+            return min(deficit_kw, self.config.fc_dispatch_max_kw)
+
+        return 0.0

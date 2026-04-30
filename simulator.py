@@ -29,19 +29,22 @@ def simulate(
         profile_df: Zeitreihendaten (pv_kw, load_el_kw, load_heat_kw,
                     outdoor_temp_c, ev_driven_kwh, price_buy, price_sell, co2_intensity)
         config:     Systemparameter
-        strategy:   Betriebsstrategie mit .decide(state, profile_t)
+        strategy:   Betriebsstrategie mit .decide(state, profile_t, forecast_t)
 
     Returns:
         DataFrame: Eingangsprofil + Simulationsergebnisse pro Zeitschritt
     """
     model = EnergySystemModel(config)
     state = model.initial_state()
+    profile_df = profile_df.reset_index(drop=True)
 
     results = []
 
-    for _, row in profile_df.iterrows():
+    for step_idx, row in profile_df.iterrows():
+        forecast_window = profile_df.iloc[step_idx : step_idx + 24]
+
         # 1. Strategie entscheidet: Was tun in diesem Zeitschritt?
-        decision = strategy.decide(state, row)
+        decision = strategy.decide(state, row, forecast_window)
 
         # 2. Physik berechnet neuen Zustand und loggt alle Groessen
         new_state, step_log = model.step(state, decision, row)
