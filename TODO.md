@@ -40,12 +40,18 @@ Aktuell vergleichen wir die beiden Szenarien, ist aber nicht das Ziel. wir wolle
 
 ## 23.04.2026
 - config.py entkoppeln, damit die API-Abfrage nicht mehr im Konstruktor läuft und keine Seiteneffekte bei jedem Import entstehen._check_
-- scenario.py und simulator.py bereinigen, damit Szenarien, Strategien und Ergebnisobjekte klarer getrennt sind._check_
+- scenario.py und simulator.py bereinigen, damit Szenarien, Strategien und Ergebnisobjekte klarer getrennt sind. _check_
 - Ein kleines Verifikations-Setup ergänzen, damit Pylint, Tests und eventuell ein einfacher Smoke-Test regelmäßig laufen _check_
 
 ## 07.05.2026
 
 Alles Funktionsfähig. Code soweit fertig
+Wochentage ändern (Anna)
+Plots darstellen: (Felix)
+H2 Verlauf Jahr
+Netzbezug Jahr
+reiter gui (Nick)
+
 
 ## 23.05.2026
 
