@@ -80,6 +80,7 @@ def load_profiles(config: SystemConfig) -> pd.DataFrame:
     pv_kw = pv_df["pv_kw"].values
 
     n = len(load_el)
+    timestamps = pd.date_range(start="2023-01-01", periods=n, freq="h")
 
     # --- EV-Profil (erweiterbar, siehe _build_ev_profile oben) ---
     ev_demand = _build_ev_profile(n).values
@@ -87,6 +88,7 @@ def load_profiles(config: SystemConfig) -> pd.DataFrame:
     # --- Zusammenführen ---
     profiles = pd.DataFrame(
         {
+            "timestamp": timestamps,
             "load_el_kw": load_el,
             "load_heat_kw": load_heat,
             "pv_kw": pv_kw,

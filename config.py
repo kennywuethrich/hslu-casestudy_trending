@@ -84,9 +84,6 @@ class SystemConfig:
             self.fc_dispatch_max_kw <= self.fc_kw_max
         ), "fc_dispatch_max_kw darf fc_kw_max nicht überschreiten"
 
-        # Aktuellen Strompreis von EKZ Zürich API abrufen
-        self._fetch_price_from_api()
-
     # --- H₂-Speicher: abgeleitete Eigenschaften --------------------------
 
     @property
@@ -127,8 +124,11 @@ class SystemConfig:
 
     # --- EKZ Zürich API: aktueller Strompreis ----------------------------
 
-    def _fetch_price_from_api(self):
-        """Ruft aktuellen Kombitarif von EKZ Zürich API ab (optional)."""
+    def fetch_price_from_api(self):
+        """
+        Abrufen vom aktuellen Tarif von der API (EKZ Zürich) und überschreibt ggf. price_buy_chf
+        Methode wird NICHT automatisch beim Konstruktor aufgerufen, also muss explizit aufgerufen werden.
+        """
         try:
             url = "https://data.stadt-zuerich.ch/api/3/action/datastore_search"
             params = {

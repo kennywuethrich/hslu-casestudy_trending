@@ -1,8 +1,20 @@
 # Simulations-Schleife: Modell + Strategie zusammenstecken.
 
+from dataclasses import dataclass
 import pandas as pd
 from config import SystemConfig
 from physics_model import EnergySystemModel
+
+
+@dataclass
+class SimulationResult:
+    """Beinhaltet das Ergebnis einer Simulation mit Kontext."""
+
+    scenario_name: str
+    strategy_name: str
+    config: SystemConfig
+    profile_df: pd.DataFrame
+    result_df: pd.DataFrame
 
 
 def simulate(
@@ -40,4 +52,24 @@ def simulate(
     return pd.concat(
         [profile_df.reset_index(drop=True), pd.DataFrame(results)],
         axis=1,
+    )
+
+
+def run_simulation(
+    scenario_name: str,
+    profile_df: pd.DataFrame,
+    config: SystemConfig,
+    strategy,
+    strategy_name: str | None = None,
+) -> SimulationResult:
+    """Führt eine Simulation aus und packt das Ergebnis in ein Objekt."""
+    result_df = simulate(profile_df, config, strategy)
+    strategy_name = strategy_name or type(strategy).__name__
+
+    return SimulationResult(
+        scenario_name=scenario_name,
+        strategy_name=strategy_name,
+        config=config,
+        profile_df=profile_df,
+        result_df=result_df,
     )

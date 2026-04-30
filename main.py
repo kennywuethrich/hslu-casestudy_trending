@@ -18,6 +18,10 @@ def main():
     scenario = ScenarioManager.get_default()
     print(f"\n✓ Szenario: {scenario.name}")
     print(f"  {scenario.description}\n")
+    
+    # Optional: Aktuelle Strompreise von der EKZ API abrufen
+    print("--> Versuche, aktuelle Strompreise von EKZ API zu laden...")
+    scenario.config.fetch_price_from_api()
 
     # Profile laden
     profiles_df = load_profiles(scenario.config)

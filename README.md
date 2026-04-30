@@ -35,6 +35,26 @@ python .\gui\gui_main.py
 python main.py
 ```
 
+## Verifikation
+
+Installiere die Entwicklerabhängigkeiten:
+
+```bash
+pip install -r requirements-dev.txt
+```
+
+Führe den schnellen Projektcheck aus:
+
+```bash
+python verify.py
+```
+
+Oder überspringe die Pylint-Prüfung, wenn sie nicht installiert ist:
+
+```bash
+python verify.py --skip-pylint
+```
+
 ## Technischer Ablauf (aktueller Code)
 
 1. GUI startet in `gui/gui_main.py` über `main()` und ruft `launch()` auf.

@@ -1,3 +1,4 @@
+import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import pandas as pd
 
@@ -21,8 +22,18 @@ def plot_h2_soc(
         raise ValueError("DataFrame muss die Spalte 'h2_soc_pct' enthalten!")
 
     fig, ax = plt.subplots(figsize=(12, 5))
-    ax.plot(df["h2_soc_pct"], label="H2 Füllstand [%]", color="tab:blue", linewidth=2)
-    ax.set_xlabel("Zeitschritt [h]")
+
+    if "timestamp" in df.columns:
+        x = pd.to_datetime(df["timestamp"])
+        ax.plot(x, df["h2_soc_pct"], label="H2 Füllstand [%]", color="tab:blue", linewidth=2)
+        ax.set_xlabel("Monat")
+        ax.xaxis.set_major_locator(mdates.MonthLocator())
+        ax.xaxis.set_major_formatter(mdates.DateFormatter("%b"))
+        fig.autofmt_xdate(rotation=45)
+    else:
+        ax.plot(df["h2_soc_pct"], label="H2 Füllstand [%]", color="tab:blue", linewidth=2)
+        ax.set_xlabel("Zeitschritt [h]")
+
     ax.set_ylabel("H2 Füllstand [%]", color="tab:blue")
     ax.tick_params(axis="y", labelcolor="tab:blue")
     ax.set_ylim([0, 100])
