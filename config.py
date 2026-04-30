@@ -69,6 +69,20 @@ class SystemConfig:
     fc_peak_shaving_kw: float = 37.4  # Peak-Shaving-Grenze [kW]
     fc_dispatch_max_kw: float = 18.0  # Maximale FC-Einsatzleistung [kW]
 
+    # --- Szenario-Profile und Netzrestriktionen --------------------------
+    scenario_id: str = "baseline"
+    grid_import_limit_kw: Optional[float] = None
+    ev_profile_mode: str = "none"  # none|commuter_peak|travel_weekend
+    ev_fleet_size: int = 1
+    ev_evening_trip_kwh_per_vehicle: float = 0.0
+    cold_week_enabled: bool = False
+    cold_week_start_day: int = 15
+    cold_week_duration_days: int = 7
+    cold_week_delta_c: float = -7.0
+    travel_weekend_enabled: bool = False
+    travel_weekend_start_day: int = 180
+    travel_trip_kwh_per_vehicle: float = 40.0
+
     # --- Physikalische Konstanten (unveränderlich) -----------------------
     _H2_MOLAR_MASS_KG_PER_MOL: ClassVar[float] = 0.00201588
     _UNIVERSAL_GAS_CONSTANT_J_PER_MOLK: ClassVar[float] = 8.314462618
@@ -83,6 +97,9 @@ class SystemConfig:
         assert (
             self.fc_dispatch_max_kw <= self.fc_kw_max
         ), "fc_dispatch_max_kw darf fc_kw_max nicht überschreiten"
+        assert self.ev_fleet_size >= 1, "ev_fleet_size muss >= 1 sein"
+        if self.grid_import_limit_kw is not None:
+            assert self.grid_import_limit_kw >= 0, "grid_import_limit_kw muss >= 0 sein"
 
     # --- H₂-Speicher: abgeleitete Eigenschaften --------------------------
 

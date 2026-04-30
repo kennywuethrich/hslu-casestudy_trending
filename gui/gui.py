@@ -81,22 +81,29 @@ def _run_simulations_in_process(
 
     try:
         with redirect_stdout(log_writer), redirect_stderr(log_writer):
-            print(f"Szenario 1: {scenario_1_name}")
-            print(f"Szenario 2: {scenario_2_name}")
+            print(f"Szenario A => {scenario_1_name}")
+            print(f"Szenario B => {scenario_2_name}")
 
             scenario_1 = ScenarioManager.get_by_name(scenario_1_name)
             scenario_2 = ScenarioManager.get_by_name(scenario_2_name)
 
             # Optional: Versuche, aktuelle Strompreise zu laden
-            # Nur Szenario 1 (Standard) lädt API-Preise
-            # Szenario 2 behält konfigurierte Preise
-            print("→ Lade aktuelle Strompreise für Szenario 1...")
-            scenario_1.config.fetch_price_from_api()
+            # Nur Szenario A lädt API-Preise, alle anderen bleiben fix konfiguriert.
+            baseline_names = {"Szenario A", "Szenario 1"}
+            if scenario_1.name in baseline_names:
+                print("→ Lade aktuelle Strompreise für Baseline-Szenario...")
+                scenario_1.config.fetch_price_from_api()
+            if scenario_2.name in baseline_names:
+                print("→ Lade aktuelle Strompreise für Baseline-Szenario...")
+                scenario_2.config.fetch_price_from_api()
 
-            simulations = [(scenario_1, 1), (scenario_2, 2)]
+            simulations = [
+                ("A", scenario_1),
+                ("B", scenario_2),
+            ]
 
-            for scenario, scenario_number in simulations:
-                print(f"Starte Berechnung für Szenario {scenario_number}...")
+            for slot_label, scenario in simulations:
+                print(f"Starte Berechnung für Szenario {slot_label}...")
                 print(f"  Strompreis: {scenario.config.price_buy_chf:.4f} CHF/kWh")
 
                 profiles_df = load_profiles(scenario.config)
@@ -120,28 +127,31 @@ def _run_simulations_in_process(
                     scenario.config,
                     label="OptimizedStrategy",
                 )
-                save_kpis_by_scenario(scenario_number, kpi_base, kpi_optimized)
+                save_kpis_by_scenario(slot_label, kpi_base, kpi_optimized)
 
-                print(f"Erzeuge Plots für Szenario {scenario_number}...")
+                print(f"Erzeuge Plots für Szenario {slot_label}...")
                 capacity_kwh = scenario.config.h2_capacity_kwh
-                scenario_name = scenario.name.replace(" ", "_")
 
-                h2_file_name = f"plot_{scenario_name}_vergleich_h2.png"
+                h2_file_name = f"plot_szenario_{slot_label}_vergleich_h2.png"
                 h2_save_path = results_dir / h2_file_name
                 plot_h2_soc_comparison(
                     result_base,
                     result_optimized,
-                    title=f"H2-Füllstand – {scenario.name} (Vergleich)",
+                    title=f"H2-Füllstand – Szenario {slot_label} (Vergleich)",
                     save_path=str(h2_save_path),
                     capacity_kwh=capacity_kwh,
                 )
 
-                consumption_file_name = f"plot_netzbezug_{scenario_name}_vergleich.png"
+                consumption_file_name = (
+                    f"plot_netzbezug_szenario_{slot_label}_vergleich.png"
+                )
                 consumption_save_path = results_dir / consumption_file_name
                 plot_consumption_averages_comparison(
                     result_base,
                     result_optimized,
-                    title=f"Netzbezug-Mittelwerte – {scenario.name} (Vergleich)",
+                    title=(
+                        "Netzbezug-Mittelwerte – " f"Szenario {slot_label} (Vergleich)"
+                    ),
                     save_path=str(consumption_save_path),
                 )
 
@@ -278,7 +288,7 @@ class StrategyGUI:
         selector_card.grid_columnconfigure(0, weight=1)
 
         scenarios = [scenario.name for scenario in ScenarioManager.get_all_scenarios()]
-        ctk.CTkLabel(selector_card, text="Szenario 1", font=self.FONT_TEXT).grid(
+        ctk.CTkLabel(selector_card, text="Szenario A", font=self.FONT_TEXT).grid(
             row=0,
             column=0,
             sticky="w",
@@ -298,7 +308,7 @@ class StrategyGUI:
         self.s1_combo.set(scenarios[0])
         self.s1_combo.grid(row=1, column=0, sticky="ew", padx=12, pady=(0, 10))
 
-        ctk.CTkLabel(selector_card, text="Szenario 2", font=self.FONT_TEXT).grid(
+        ctk.CTkLabel(selector_card, text="Szenario B", font=self.FONT_TEXT).grid(
             row=2,
             column=0,
             sticky="w",
@@ -371,8 +381,8 @@ class StrategyGUI:
         )
         self.desc_tabs.grid(row=1, column=0, sticky="nsew", padx=10, pady=(0, 10))
 
-        tab_1 = self.desc_tabs.add("Szenario 1")
-        tab_2 = self.desc_tabs.add("Szenario 2")
+        tab_1 = self.desc_tabs.add("Szenario A")
+        tab_2 = self.desc_tabs.add("Szenario B")
         tab_1.grid_rowconfigure(0, weight=1)
         tab_1.grid_columnconfigure(0, weight=1)
         tab_2.grid_rowconfigure(0, weight=1)
@@ -396,7 +406,7 @@ class StrategyGUI:
         self.desc2.grid(row=0, column=0, sticky="nsew", padx=4, pady=4)
         self.desc2.configure(state="disabled")
 
-        self.desc_tabs.set("Szenario 1")
+        self.desc_tabs.set("Szenario A")
 
         results_panel = ctk.CTkFrame(
             content,
@@ -433,7 +443,7 @@ class StrategyGUI:
         )
         self.result_combo = ctk.CTkComboBox(
             view_frame,
-            values=["Szenario 1", "Szenario 2"],
+            values=["Szenario A", "Szenario B"],
             width=200,
             height=34,
             corner_radius=10,
@@ -441,7 +451,7 @@ class StrategyGUI:
             dropdown_font=self.FONT_TEXT,
             command=self._load_result_csv,
         )
-        self.result_combo.set("Szenario 1")
+        self.result_combo.set("Szenario A")
         self.result_combo.pack(side="left")
 
         log_frame = ctk.CTkFrame(
@@ -626,12 +636,12 @@ class StrategyGUI:
     def _update_desc1(self, _: Any) -> None:
         """Aktualisiert Beschreibung für das erste Szenario."""
         self._update_desc(self.s1_combo, self.desc1)
-        self.desc_tabs.set("Szenario 1")
+        self.desc_tabs.set("Szenario A")
 
     def _update_desc2(self, _: Any) -> None:
         """Aktualisiert Beschreibung für das zweite Szenario."""
         self._update_desc(self.s2_combo, self.desc2)
-        self.desc_tabs.set("Szenario 2")
+        self.desc_tabs.set("Szenario B")
 
     def _compare(self) -> None:
         """Startet beide Simulationen in einem Background-Thread."""
@@ -673,7 +683,7 @@ class StrategyGUI:
         self._set_status("Fertig", "#22C55E")
         self.btn.configure(state="normal")
 
-        self._load_result_csv("Szenario 1")
+        self._load_result_csv("Szenario A")
         self._append_log("KPI-Tabelle geladen.")
         self._cleanup_sim_process()
 
@@ -681,10 +691,15 @@ class StrategyGUI:
         """Lädt CSV-Datei für das ausgewählte Szenario und zeigt sie an.
 
         Args:
-            scenario_display: "Szenario 1" oder "Szenario 2".
+            scenario_display: "Szenario A" oder "Szenario B".
         """
-        scenario_number = scenario_display.split()[-1]
-        csv_path = self.results_dir / f"kpis_szenario_{scenario_number}.csv"
+        scenario_map = {"Szenario A": "a", "Szenario B": "b"}
+        slot = scenario_map.get(scenario_display)
+        if slot is None:
+            self._show_placeholder()
+            return
+
+        csv_path = self.results_dir / f"kpis_szenario_{slot}.csv"
 
         if not csv_path.exists():
             self._show_placeholder()

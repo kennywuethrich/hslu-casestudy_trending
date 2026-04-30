@@ -1,4 +1,6 @@
-"""Haupteinstieg für Szenario-Vergleiche."""
+"""Haupteinstieg für den Vergleich von Szenario A und B."""
+
+from typing import Dict, Tuple
 
 from scenario import ScenarioManager
 from simulator import simulate
@@ -12,18 +14,18 @@ from analyzer import (
 from plots import plot_consumption_averages_comparison, plot_h2_soc_comparison
 
 
-def run_scenario(scenario_number: int, scenario) -> tuple:
-    """Führt Simulation für ein Szenario aus.
+def run_scenario(scenario_slot: str, scenario) -> Tuple[Dict, Dict]:
+    """Führt Simulation für einen A/B-Slot aus.
 
     Args:
-        scenario_number: Szenario-Nummer (für CSV-Speicherung)
+        scenario_slot: A oder B (für CSV-Speicherung)
         scenario: Scenario-Objekt mit config
 
     Returns:
         (kpi_base, kpi_optimized) Tuple
     """
     print("\n" + "=" * 80)
-    print(f"Szenario {scenario_number}: {scenario.name}")
+    print(f"Szenario {scenario_slot}: {scenario.name}")
     print("=" * 80)
     print(f"{scenario.description}\n")
 
@@ -52,7 +54,7 @@ def run_scenario(scenario_number: int, scenario) -> tuple:
     print_kpi_table([kpi_base, kpi_optimized])
 
     # KPIs speichern
-    save_kpis_by_scenario(scenario_number, kpi_base, kpi_optimized)
+    save_kpis_by_scenario(scenario_slot, kpi_base, kpi_optimized)
 
     # Plots
     print("→ Generiere Plots...")
@@ -71,47 +73,47 @@ def run_scenario(scenario_number: int, scenario) -> tuple:
     return kpi_base, kpi_optimized
 
 
-def main():
-    """Führt Simulationen für alle Szenarien aus."""
+def main() -> None:
+    """Führt Simulationen für Szenario A und Szenario B aus."""
     print("\n" + "=" * 80)
     print(" " * 15 + "H2-MICROGRID ENERGIESYSTEM SIMULATION")
     print(" " * 20 + "SZENARIO-VERGLEICH")
     print("=" * 80)
 
-    # Szenario A
-    scenario_a = ScenarioManager.get_by_name("Szenario A")
-    print(f"\n--> Versuche, aktuelle Strompreise von EKZ API zu laden...")
-    scenario_a.config.fetch_price_from_api()
+    scenarios = ScenarioManager.get_all_scenarios()
+    if len(scenarios) < 2:
+        raise ValueError("Es werden mindestens zwei Szenarien benötigt")
 
-    kpi_base_a, kpi_opt_a = run_scenario(1, scenario_a)
+    scenario_a = scenarios[0]
+    scenario_b = scenarios[1]
 
-    # Szenario B
-    scenario_b = ScenarioManager.get_by_name("Szenario B")
-    kpi_base_b, kpi_opt_b = run_scenario(2, scenario_b)
+    if scenario_a.name in {"Szenario A", "Szenario 1"}:
+        print("\n--> Versuche, aktuelle Strompreise von EKZ API zu laden...")
+        scenario_a.config.fetch_price_from_api()
+
+    kpi_base_a, kpi_opt_a = run_scenario("A", scenario_a)
+    kpi_base_b, kpi_opt_b = run_scenario("B", scenario_b)
 
     print("\n" + "=" * 80)
-    print("ZUSAMMENFASSUNG ALLE SZENARIEN")
+    print("ZUSAMMENFASSUNG")
     print("=" * 80)
-    print("\nSzenario A (aktueller Preis):")
+    print("\nSzenario A:")
     print(f"  BaseStrategy:      {kpi_base_a['Energiekosten [CHF/a]']:.0f} CHF/a")
     print(f"  OptimizedStrategy: {kpi_opt_a['Energiekosten [CHF/a]']:.0f} CHF/a")
     print(
-        f"  Ersparnis:         {kpi_base_a['Energiekosten [CHF/a]'] - kpi_opt_a['Energiekosten [CHF/a]']:.0f} CHF/a"
+        "  Ersparnis:         "
+        f"{kpi_base_a['Energiekosten [CHF/a]'] - kpi_opt_a['Energiekosten [CHF/a]']:.0f} CHF/a"
     )
 
-    print("\nSzenario B (günstiger Preis):")
+    print("\nSzenario B:")
     print(f"  BaseStrategy:      {kpi_base_b['Energiekosten [CHF/a]']:.0f} CHF/a")
     print(f"  OptimizedStrategy: {kpi_opt_b['Energiekosten [CHF/a]']:.0f} CHF/a")
     print(
-        f"  Ersparnis:         {kpi_base_b['Energiekosten [CHF/a]'] - kpi_opt_b['Energiekosten [CHF/a]']:.0f} CHF/a"
+        "  Ersparnis:         "
+        f"{kpi_base_b['Energiekosten [CHF/a]'] - kpi_opt_b['Energiekosten [CHF/a]']:.0f} CHF/a"
     )
 
-    print("\nPreis-Vergleich (BaseStrategy):")
-    print(
-        f"  Szenario A teurer: {kpi_base_a['Energiekosten [CHF/a]'] - kpi_base_b['Energiekosten [CHF/a]']:.0f} CHF/a"
-    )
-
-    print("\n✓ Alle Szenarien simuliert und gespeichert!")
+    print("\n✓ Szenario A und B simuliert und gespeichert!")
     print("=" * 80 + "\n")
 
 

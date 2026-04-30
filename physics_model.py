@@ -129,7 +129,15 @@ class EnergySystemModel:
         # P_PV + P_FC + P_grid_in = P_load + P_ely + P_HP + P_EV + P_grid_out
         P_demand = P_load_el_kw + P_ely + P_hp + P_ev  # [kW_el]
         P_supply = P_pv_kw + P_fc  # [kW_el]
-        P_grid_in = max(0.0, P_demand - P_supply)  # [kW_el]
+        raw_grid_import_kw = max(0.0, P_demand - P_supply)  # [kW_el]
+
+        if cfg.grid_import_limit_kw is None:
+            P_grid_in = raw_grid_import_kw
+            unmet_load_kw = 0.0
+        else:
+            P_grid_in = min(raw_grid_import_kw, cfg.grid_import_limit_kw)
+            unmet_load_kw = max(0.0, raw_grid_import_kw - P_grid_in)
+
         P_grid_out = max(0.0, P_supply - P_demand)  # [kW_el]
 
         # ===== Neuer Zustand =====
@@ -143,6 +151,7 @@ class EnergySystemModel:
         step_log = {
             "grid_import_kw": P_grid_in,
             "grid_export_kw": P_grid_out,
+            "unserved_load_kw": unmet_load_kw,
             "ely_power_kw": P_ely,
             "fc_power_kw": P_fc,
             "hp_el_kw": P_hp,

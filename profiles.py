@@ -21,7 +21,7 @@ from config import SystemConfig
 # ---------------------------------------------------------------------------
 
 
-def _build_ev_profile(n: int) -> pd.Series:
+def _build_ev_profile(n: int, config: SystemConfig) -> pd.Series:
     """
     Gibt ein EV-Nachfrageprofil zurück (Länge n, stündlich, in kWh).
 
@@ -35,7 +35,80 @@ def _build_ev_profile(n: int) -> pd.Series:
                 result[h] = 2.5           # kWh pro Stunde
         return result
     """
-    return pd.Series(0.0, index=range(n))
+    demand = pd.Series(0.0, index=range(n), dtype=float)
+
+    if config.ev_profile_mode == "commuter_peak":
+        return _build_commuter_peak_profile(demand, config)
+
+    if config.ev_profile_mode == "travel_weekend":
+        demand = _build_commuter_peak_profile(demand, config)
+        if config.travel_weekend_enabled:
+            demand = _inject_travel_weekend(demand, config)
+        return demand
+
+    return demand
+
+
+def _build_commuter_peak_profile(
+    demand: pd.Series,
+    config: SystemConfig,
+) -> pd.Series:
+    """Erzeugt Abend-Ladebedarf einer Pendler-Flotte (Mo-Fr, 18-22 Uhr)."""
+    trip_kwh = config.ev_evening_trip_kwh_per_vehicle
+    if trip_kwh <= 0.0:
+        return demand
+
+    total_trip_kwh = trip_kwh * float(config.ev_fleet_size)
+    per_hour_kwh = total_trip_kwh / 4.0
+
+    for hour_idx in range(len(demand)):
+        day_idx = hour_idx // 24
+        weekday = day_idx % 7
+        hour_of_day = hour_idx % 24
+
+        if weekday < 5 and 18 <= hour_of_day <= 21:
+            demand.iloc[hour_idx] += per_hour_kwh
+
+    return demand
+
+
+def _inject_travel_weekend(
+    demand: pd.Series,
+    config: SystemConfig,
+) -> pd.Series:
+    """Fügt ein Reise-Wochenende als zusätzliche EV-Fahrtenergie ein."""
+    start_hour = config.travel_weekend_start_day * 24
+    saturday_9 = start_hour + 9
+    sunday_18 = start_hour + 24 + 18
+    trip_energy = config.travel_trip_kwh_per_vehicle * float(config.ev_fleet_size)
+
+    if 0 <= saturday_9 < len(demand):
+        demand.iloc[saturday_9] += trip_energy
+
+    if 0 <= sunday_18 < len(demand):
+        demand.iloc[sunday_18] += trip_energy
+
+    return demand
+
+
+def _apply_cold_week(
+    outdoor_temp_c: np.ndarray,
+    config: SystemConfig,
+) -> np.ndarray:
+    """Senkt die Außentemperatur in einer definierten Kältewoche ab."""
+    if not config.cold_week_enabled:
+        return outdoor_temp_c
+
+    start_hour = config.cold_week_start_day * 24
+    end_hour = start_hour + config.cold_week_duration_days * 24
+    clipped_start = max(0, start_hour)
+    clipped_end = min(len(outdoor_temp_c), end_hour)
+
+    adjusted = outdoor_temp_c.copy()
+    adjusted[clipped_start:clipped_end] = (
+        adjusted[clipped_start:clipped_end] + config.cold_week_delta_c
+    )
+    return adjusted
 
 
 # ---------------------------------------------------------------------------
@@ -74,6 +147,7 @@ def load_profiles(config: SystemConfig) -> pd.DataFrame:
         heat_df["Demand space heating kWh"] + heat_df["Demand domestic hot water kWh"]
     ).values
     outdoor_temp_c = heat_df["TAir"].values  # Außentemperatur aus Wärmeprofil
+    outdoor_temp_c = _apply_cold_week(outdoor_temp_c, config)
 
     # --- File 3: PV-Ertrag ---
     pv_df = pd.read_csv(root / "pv_yield_profile.csv")
@@ -83,7 +157,7 @@ def load_profiles(config: SystemConfig) -> pd.DataFrame:
     timestamps = pd.date_range(start="2023-01-01", periods=n, freq="h")
 
     # --- EV-Profil (erweiterbar, siehe _build_ev_profile oben) ---
-    ev_demand = _build_ev_profile(n).values
+    ev_demand = _build_ev_profile(n, config).values
 
     # --- Zusammenführen ---
     profiles = pd.DataFrame(

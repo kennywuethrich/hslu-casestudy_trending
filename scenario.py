@@ -31,7 +31,7 @@ def _build_scenarios() -> List[Scenario]:
     default_config = SystemConfig()
     return [
         Scenario(
-            name="Szenario A",
+            name="Szenario 1",
             config=default_config,
             description=(
                 "Baseline-Szenario mit aktuellen Strompreisen.\n\n"
@@ -41,13 +41,69 @@ def _build_scenarios() -> List[Scenario]:
             ),
         ),
         Scenario(
-            name="Szenario B",
+            name="Szenario 2",
             config=SystemConfig(price_buy_chf=0.15, price_sell_chf=0.08),
             description=(
                 "Szenario mit günstigen Strompreisen.\n\n"
                 "• Strombezug: 0.15 CHF/kWh\n"
                 "• Stromeinspeisung: 0.08 CHF/kWh\n\n"
                 "Günstige Preise begünstigen H2-Produktion (Elektrolyse)."
+            ),
+        ),
+        Scenario(
+            name="Szenario 3",
+            config=SystemConfig(
+                scenario_id="commuter_peak",
+                ev_profile_mode="commuter_peak",
+                ev_fleet_size=24,
+                ev_evening_trip_kwh_per_vehicle=7.0,
+                ev_capacity_kwh=1440.0,
+                ev_charge_max_kw=264.0,
+            ),
+            description=(
+                "Pendler-Flotte mit Abend-Peak.\n\n"
+                "• 24 E-Autos als Flotte\n"
+                "• Fahrenergie konzentriert Mo-Fr von 18-21 Uhr\n"
+                "• Hohe gleichzeitige Ladeleistung am Abend\n\n"
+                "Dieses Szenario stresst Lastspitzen und Peak-Shaving."
+            ),
+        ),
+        Scenario(
+            name="Szenario 4",
+            config=SystemConfig(
+                scenario_id="grid_limit",
+                grid_import_limit_kw=45.0,
+            ),
+            description=(
+                "Netzlimit-Szenario mit begrenztem Netzanschluss.\n\n"
+                "• Maximaler Netzbezug: 45 kW\n"
+                "• Nicht gedeckter Bedarf wird als KPI ausgewiesen\n\n"
+                "Dieses Szenario testet Robustheit bei Netzengpässen."
+            ),
+        ),
+        Scenario(
+            name="Szenario 5",
+            config=SystemConfig(
+                scenario_id="cold_week_travel_weekend",
+                ev_profile_mode="travel_weekend",
+                ev_fleet_size=10,
+                ev_evening_trip_kwh_per_vehicle=4.0,
+                ev_capacity_kwh=600.0,
+                ev_charge_max_kw=110.0,
+                cold_week_enabled=True,
+                cold_week_start_day=330,
+                cold_week_duration_days=7,
+                cold_week_delta_c=-9.0,
+                travel_weekend_enabled=True,
+                travel_weekend_start_day=333,
+                travel_trip_kwh_per_vehicle=35.0,
+            ),
+            description=(
+                "Kalte Woche plus EV-Reise-Wochenende.\n\n"
+                "• 7 Tage Kältewelle im Winter\n"
+                "• Zusätzliche EV-Reisen am Wochenende\n"
+                "• Erhöhte Wärme- und Mobilitätslast gleichzeitig\n\n"
+                "Dieses Szenario reizt Speicher- und Prognoselogik aus."
             ),
         ),
     ]

@@ -31,6 +31,11 @@ def calculate_kpis(
 
     total_import = (result_df["grid_import_kw"] * timestep_hours).sum()
     total_export = (result_df["grid_export_kw"] * timestep_hours).sum()
+    total_unserved = (
+        (result_df["unserved_load_kw"] * timestep_hours).sum()
+        if "unserved_load_kw" in result_df.columns
+        else 0.0
+    )
 
     total_el_load = (
         (result_df["load_el_kw"] + result_df[ev_power_column]) * timestep_hours
@@ -76,6 +81,7 @@ def calculate_kpis(
         "label": label,
         "Netzbezug [kWh]": round(total_import, 0),
         "Netzeinspeisung [kWh]": round(total_export, 0),
+        "Nicht gedeckter Bedarf [kWh]": round(total_unserved, 0),
         "Autarkiegrad [%]": round(autarky * 100, 1),
         "Energiekosten [CHF/a]": round(net_costs, 0),
         "CO2-Emissionen [tCO2/a]": round(co2_t, 2),
@@ -111,18 +117,28 @@ def save_kpis_to_csv(kpi_list: List[Dict], filepath: str = "kpi_ergebnisse.csv")
     print(f"  ✓ KPI-Ergebnisse gespeichert: {resolved_path}")
 
 
-def save_kpis_by_scenario(scenario_number: int, kpi_base: Dict, kpi_optimized: Dict):
-    """Speichert KPIs für ein Szenario als CSV mit beiden Strategien.
+def save_kpis_by_scenario(
+    scenario_slot: str | int,
+    kpi_base: Dict,
+    kpi_optimized: Dict,
+) -> None:
+    """Speichert KPIs für Szenario A oder B als CSV mit beiden Strategien.
 
     Args:
-        scenario_number: Nummer des Szenarios (1 oder 2)
+        scenario_slot: Slot-Bezeichner ("A"/"B") oder alt (1/2)
         kpi_base: KPI-Dict für BaseStrategy
         kpi_optimized: KPI-Dict für OptimizedStrategy
     """
     output_dir = "results"
     os.makedirs(output_dir, exist_ok=True)
 
-    filepath = os.path.join(output_dir, f"kpis_szenario_{scenario_number}.csv")
+    slot = str(scenario_slot).strip().lower()
+    slot_alias = {"1": "a", "2": "b"}
+    slot = slot_alias.get(slot, slot)
+    if slot not in {"a", "b"}:
+        raise ValueError("scenario_slot muss A/B oder 1/2 sein")
+
+    filepath = os.path.join(output_dir, f"kpis_szenario_{slot}.csv")
 
     data = {
         "KPI": [k for k in kpi_base.keys() if k != "label"],
