@@ -106,11 +106,11 @@ class BaseStrategy:
     ) -> float:
         """
         Brennstoffzelle einschalten wenn Strombedarf nicht durch PV gedeckt
-        und Preis hoch oder Netzlast zu groß.
+        und Netzlast zu groß (Peak Shaving).
 
         Regel:
           WENN PV-Defizit > 0
-            UND (Preis > price_threshold_fc ODER Defizit > fc_peak_shaving_kw)
+            UND Defizit > fc_peak_shaving_kw (Lastspitzen-Schwellenwert)
             UND H₂-SOC > h2_min_soc
           DANN Leistung = min(Defizit, fc_dispatch_max_kw)
           SONST 0 kW
@@ -120,11 +120,10 @@ class BaseStrategy:
         if deficit_kw <= 0.0:
             return 0.0  # Kein Defizit → FC nicht nötig
 
-        price_trigger = price_buy > self.config.price_threshold_fc
         peak_shave_trigger = deficit_kw > self.config.fc_peak_shaving_kw
 
-        if not (price_trigger or peak_shave_trigger):
-            return 0.0  # Weder teurer Strom noch Lastspitze → aus
+        if not peak_shave_trigger:
+            return 0.0  # Keine Lastspitze → aus
 
         if h2_soc <= self.config.h2_min_soc:
             return 0.0  # Speicher fast leer → schützen
@@ -177,21 +176,18 @@ class BaseStrategy:
 
 class OptimizedStrategy(BaseStrategy):
     """
-    Vereinfachte optimierte Steuerung — fokussiert auf Smart Charging.
+    Optimierte Steuerung mit 24h-Forecast für Brennstoffzelle.
 
-    Problem der ursprünglichen OptimizedStrategy:
-      - H2-Speicherverluste sind zu hoch (76% Hin-Rückweg)
-      - WP-Vorladen rentiert sich nicht mit aktuellem Preisgefüge
-      - Aggressive Speicherung führt zu höheren Kosten, nicht niedrigeren
+    Unterschied zu BaseStrategy:
+      - Elektrolyseur: wie BaseStrategy (PV-Überschuss)
+      - Brennstoffzelle: mit 24h-Vorausblick optimiert
+      - Wärmepumpe: wie BaseStrategy (nur Wärmebedarf decken)
+      - EV: Normales Laden (keine Preis-Abhängigkeit)
 
-    Neue Ansatz:
-      - Elektrolyseur: nur PV-Überschuss (wie BaseStrategy)
-      - Brennstoffzelle: wie BaseStrategy (kein proaktives Entladen)
-      - Wärmepumpe: nur Wärmebedarf decken (kein aggressives Vorladen)
-      - EV: Smart Charging - nur laden bei günstigem Preis oder Notfall
+    Technische Implementierung:
+      - forecast_profile_24h: Optional DataFrame mit nächsten 24 Stunden
+      - _decide_fuel_cell_opt(): Nutzt Forecast zur Entladungsplanung
     """
-
-    PRICE_THRESHOLD_CHEAP = 0.20  # CHF/kWh — "günstiger" Strom für EV
 
     def decide(
         self,
@@ -246,27 +242,18 @@ class OptimizedStrategy(BaseStrategy):
         self, ev_driven_kwh: float, ev_soc_frac: float, price_buy: float
     ) -> float:
         """
-        Smart Charging: Nur laden wenn Preis günstig oder Akku fast leer.
+        EV-Laden: Nachladen wenn gefahren wurde.
 
-        Regeln:
-          WENN EV fast leer (SOC < 20%) → immer laden (Notfall)
-          WENN Preis günstig (< 0.20 CHF/kWh) → laden
-          SONST warten
+        Regel:
+          WENN gefahren (ev_driven_kwh > 0)
+          DANN Ladeleistung = ev_driven_kwh / 1h
+          SONST 0 kW
         """
         if ev_driven_kwh <= 0.0:
             return 0.0
 
         p_charge_kw = min(ev_driven_kwh / 1.0, self.config.ev_charge_max_kw)
-
-        # Notfall: Akku fast leer → sofort laden
-        if ev_soc_frac < 0.20:
-            return p_charge_kw
-
-        # Normales Laden: nur wenn Strom günstig
-        if price_buy < self.PRICE_THRESHOLD_CHEAP:
-            return p_charge_kw
-
-        return 0.0  # Warten auf günstigeren Zeitpunkt
+        return p_charge_kw
 
     def _summarize_forecast(self, forecast_t: Optional[pd.DataFrame]) -> dict:
         """Fasst ein 24h-Fenster zu einfachen Energiesummen zusammen."""

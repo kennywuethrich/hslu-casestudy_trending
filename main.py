@@ -18,7 +18,7 @@ def main():
     scenario = ScenarioManager.get_default()
     print(f"\n✓ Szenario: {scenario.name}")
     print(f"  {scenario.description}\n")
-    
+
     # Optional: Aktuelle Strompreise von der EKZ API abrufen
     print("--> Versuche, aktuelle Strompreise von EKZ API zu laden...")
     scenario.config.fetch_price_from_api()
@@ -57,7 +57,7 @@ def main():
     plot_consumption_averages_comparison(
         result_base,
         result_optimized,
-        title="Stromkonsum-Mittelwerte – Base vs Optimized",
+        title="Netzbezug-Mittelwerte – Base vs Optimized",
     )
 
     print("\n✓ Simulation abgeschlossen!")

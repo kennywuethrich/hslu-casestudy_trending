@@ -11,10 +11,10 @@ EV-Erweiterung:
   um eigene EV-Ladeprofile einzuspielen.
 """
 
+import numpy as np
 import pandas as pd
 from pathlib import Path
 from config import SystemConfig
-
 
 # ---------------------------------------------------------------------------
 # EV-Profil: hier anpassen oder ersetzen
@@ -94,9 +94,9 @@ def load_profiles(config: SystemConfig) -> pd.DataFrame:
             "pv_kw": pv_kw,
             "outdoor_temp_c": outdoor_temp_c,
             "ev_driven_kwh": ev_demand,
-            "price_buy": config.price_buy_chf,
-            "price_sell": config.price_sell_chf,
-            "co2_intensity": config.co2_grid_kg_kwh,
+            "price_buy": np.full(n, config.price_buy_chf),
+            "price_sell": np.full(n, config.price_sell_chf),
+            "co2_intensity": np.full(n, config.co2_grid_kg_kwh),
             "dt_h": 1.0,
         }
     )
