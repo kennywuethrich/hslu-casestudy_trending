@@ -86,16 +86,18 @@ def _run_simulations_in_process(
 
             scenario_1 = ScenarioManager.get_by_name(scenario_1_name)
             scenario_2 = ScenarioManager.get_by_name(scenario_2_name)
-            
+
             # Optional: Versuche, aktuelle Strompreise zu laden
-            print("→ Lade aktuelle Strompreise...")
+            # Nur Szenario 1 (Standard) lädt API-Preise
+            # Szenario 2 behält konfigurierte Preise
+            print("→ Lade aktuelle Strompreise für Szenario 1...")
             scenario_1.config.fetch_price_from_api()
-            scenario_2.config.fetch_price_from_api()
 
             simulations = [(scenario_1, 1), (scenario_2, 2)]
 
             for scenario, scenario_number in simulations:
                 print(f"Starte Berechnung für Szenario {scenario_number}...")
+                print(f"  Strompreis: {scenario.config.price_buy_chf:.4f} CHF/kWh")
 
                 profiles_df = load_profiles(scenario.config)
                 base_strategy = BaseStrategy(scenario.config)
@@ -134,14 +136,12 @@ def _run_simulations_in_process(
                     capacity_kwh=capacity_kwh,
                 )
 
-                consumption_file_name = (
-                    f"plot_stromkonsum_{scenario_name}_vergleich.png"
-                )
+                consumption_file_name = f"plot_netzbezug_{scenario_name}_vergleich.png"
                 consumption_save_path = results_dir / consumption_file_name
                 plot_consumption_averages_comparison(
                     result_base,
                     result_optimized,
-                    title=f"Stromkonsum-Mittelwerte – {scenario.name} (Vergleich)",
+                    title=f"Netzbezug-Mittelwerte – {scenario.name} (Vergleich)",
                     save_path=str(consumption_save_path),
                 )
 
