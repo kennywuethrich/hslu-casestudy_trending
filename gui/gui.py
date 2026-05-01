@@ -14,6 +14,7 @@ from typing import Any
 
 import customtkinter as ctk
 import pandas as pd
+from PIL import Image, ImageTk
 
 from plots import (
     plot_consumption_averages_comparison,
@@ -217,8 +218,11 @@ class StrategyGUI:
 
         self.results_dir = Path(__file__).parent.parent / "results"
         self.selected_result_scenario: str | None = None
+        self._current_result_view = "kpi"
+        self._current_kpi_df: pd.DataFrame | None = None
         self._table_tree: ttk.Treeview | None = None
         self._table_columns: list[str] = []
+        self._image_refs: dict[str, Any] = {}
         self._sim_process: mp.Process | None = None
         self._sim_process_queue: Any | None = None
         self._configure_ttk_style()
@@ -293,7 +297,9 @@ class StrategyGUI:
         left_panel.grid_rowconfigure(0, weight=0)
         left_panel.grid_rowconfigure(1, weight=0)
         left_panel.grid_rowconfigure(2, weight=0)
-        left_panel.grid_rowconfigure(3, weight=1)
+        left_panel.grid_rowconfigure(3, weight=0)
+        left_panel.grid_rowconfigure(4, weight=0)
+        left_panel.grid_rowconfigure(5, weight=1)
         left_panel.grid_columnconfigure(0, weight=1)
 
         setup_title = ctk.CTkLabel(
@@ -381,28 +387,40 @@ class StrategyGUI:
         )
         self.status.grid(row=0, column=1, sticky="e")
 
-        params_card = ctk.CTkFrame(
+        self.btn_toggle_parameters = ctk.CTkButton(
+            left_panel,
+            text="Parameter anzeigen",
+            command=self._toggle_parameters,
+            font=self.FONT_BUTTON,
+            height=34,
+            corner_radius=10,
+            fg_color=("#2563EB", "#2563EB"),
+            hover_color=("#1D4ED8", "#1D4ED8"),
+        )
+        self.btn_toggle_parameters.grid(row=3, column=0, sticky="ew", padx=12, pady=(0, 8))
+
+        self.params_card = ctk.CTkFrame(
             left_panel,
             corner_radius=12,
             fg_color=("#111726", "#111726"),
             border_width=1,
             border_color=("#2A314A", "#2A314A"),
         )
-        params_card.grid(row=2, column=0, sticky="ew", padx=12, pady=(0, 12))
-        params_card.grid_columnconfigure(0, weight=1)
+        self.params_card.grid(row=4, column=0, sticky="ew", padx=12, pady=(0, 12))
+        self.params_card.grid_columnconfigure(0, weight=1)
 
         ctk.CTkLabel(
-            params_card,
+            self.params_card,
             text="Modellparameter",
             font=self.FONT_SECTION,
             text_color=("#E5E7EB", "#E5E7EB"),
         ).grid(row=0, column=0, sticky="w", padx=12, pady=(10, 8))
 
-        ctk.CTkLabel(params_card, text="H2-Kapazität [kWh]", font=self.FONT_TEXT).grid(
+        ctk.CTkLabel(self.params_card, text="H2-Kapazität [kWh]", font=self.FONT_TEXT).grid(
             row=1, column=0, sticky="w", padx=12, pady=(6, 4)
         )
         self.h2_capacity_entry = ctk.CTkEntry(
-            params_card,
+            self.params_card,
             width=320,
             height=34,
             corner_radius=10,
@@ -411,11 +429,11 @@ class StrategyGUI:
         self.h2_capacity_entry.insert(0, str(ScenarioManager.get_by_name(scenarios[0]).config.h2_capacity_kwh))
         self.h2_capacity_entry.grid(row=2, column=0, sticky="ew", padx=12, pady=(0, 8))
 
-        ctk.CTkLabel(params_card, text="H2-Druck [bar]", font=self.FONT_TEXT).grid(
+        ctk.CTkLabel(self.params_card, text="H2-Druck [bar]", font=self.FONT_TEXT).grid(
             row=3, column=0, sticky="w", padx=12, pady=(6, 4)
         )
         self.h2_pressure_entry = ctk.CTkEntry(
-            params_card,
+            self.params_card,
             width=320,
             height=34,
             corner_radius=10,
@@ -424,11 +442,11 @@ class StrategyGUI:
         self.h2_pressure_entry.insert(0, str(ScenarioManager.get_by_name(scenarios[0]).config.h2_pressure_bar))
         self.h2_pressure_entry.grid(row=4, column=0, sticky="ew", padx=12, pady=(0, 8))
 
-        ctk.CTkLabel(params_card, text="PV-Fläche Faktor", font=self.FONT_TEXT).grid(
+        ctk.CTkLabel(self.params_card, text="PV-Fläche Faktor", font=self.FONT_TEXT).grid(
             row=5, column=0, sticky="w", padx=12, pady=(6, 4)
         )
         self.pv_area_entry = ctk.CTkEntry(
-            params_card,
+            self.params_card,
             width=320,
             height=34,
             corner_radius=10,
@@ -437,6 +455,8 @@ class StrategyGUI:
         self.pv_area_entry.insert(0, str(ScenarioManager.get_by_name(scenarios[0]).config.pv_area_factor))
         self.pv_area_entry.grid(row=6, column=0, sticky="ew", padx=12, pady=(0, 12))
 
+        self.params_card.grid_remove()
+
         desc_card = ctk.CTkFrame(
             left_panel,
             corner_radius=12,
@@ -444,7 +464,7 @@ class StrategyGUI:
             border_width=1,
             border_color=("#2A314A", "#2A314A"),
         )
-        desc_card.grid(row=3, column=0, sticky="nsew", padx=12, pady=(0, 12))
+        desc_card.grid(row=5, column=0, sticky="nsew", padx=12, pady=(0, 12))
         desc_card.grid_rowconfigure(1, weight=1)
         desc_card.grid_columnconfigure(0, weight=1)
 
@@ -542,42 +562,55 @@ class StrategyGUI:
         plot_button_frame.grid_columnconfigure(0, weight=1)
         plot_button_frame.grid_columnconfigure(1, weight=1)
         plot_button_frame.grid_columnconfigure(2, weight=1)
+        plot_button_frame.grid_columnconfigure(3, weight=1)
 
-        self.btn_plot_h2 = ctk.CTkButton(
+        self.btn_plot_kpi = ctk.CTkButton(
             plot_button_frame,
-            text="H2",
-            command=lambda: self._open_plot("h2"),
+            text="KPIs",
+            command=lambda: self._set_result_view("kpi"),
             font=self.FONT_BUTTON,
             height=38,
             corner_radius=12,
             fg_color=("#2563EB", "#2563EB"),
             hover_color=("#1D4ED8", "#1D4ED8"),
         )
-        self.btn_plot_h2.grid(row=0, column=0, sticky="ew", padx=4)
+        self.btn_plot_kpi.grid(row=0, column=0, sticky="ew", padx=4)
+
+        self.btn_plot_h2 = ctk.CTkButton(
+            plot_button_frame,
+            text="H2",
+            command=lambda: self._set_result_view("h2"),
+            font=self.FONT_BUTTON,
+            height=38,
+            corner_radius=12,
+            fg_color=("#2563EB", "#2563EB"),
+            hover_color=("#1D4ED8", "#1D4ED8"),
+        )
+        self.btn_plot_h2.grid(row=0, column=1, sticky="ew", padx=4)
 
         self.btn_plot_netz = ctk.CTkButton(
             plot_button_frame,
             text="Netzbezug",
-            command=lambda: self._open_plot("netzbezug"),
+            command=lambda: self._set_result_view("netzbezug"),
             font=self.FONT_BUTTON,
             height=38,
             corner_radius=12,
             fg_color=("#10B981", "#10B981"),
             hover_color=("#059669", "#059669"),
         )
-        self.btn_plot_netz.grid(row=0, column=1, sticky="ew", padx=4)
+        self.btn_plot_netz.grid(row=0, column=2, sticky="ew", padx=4)
 
         self.btn_plot_strom = ctk.CTkButton(
             plot_button_frame,
             text="Stromkonsum",
-            command=lambda: self._open_plot("stromkonsum"),
+            command=lambda: self._set_result_view("stromkonsum"),
             font=self.FONT_BUTTON,
             height=38,
             corner_radius=12,
             fg_color=("#F59E0B", "#F59E0B"),
             hover_color=("#D97706", "#D97706"),
         )
-        self.btn_plot_strom.grid(row=0, column=2, sticky="ew", padx=4)
+        self.btn_plot_strom.grid(row=0, column=3, sticky="ew", padx=4)
 
         log_frame = ctk.CTkFrame(
             results_panel,
@@ -586,7 +619,7 @@ class StrategyGUI:
             border_width=1,
             border_color=("#2A314A", "#2A314A"),
         )
-        log_frame.grid(row=1, column=0, sticky="ew", padx=14, pady=(0, 10))
+        log_frame.grid(row=3, column=0, sticky="ew", padx=14, pady=(0, 10))
         log_frame.grid_columnconfigure(0, weight=1)
 
         ctk.CTkLabel(
@@ -613,7 +646,7 @@ class StrategyGUI:
             fg_color=("#0F1320", "#0F1320"),
             border_width=0,
         )
-        self.table_frame.grid(row=2, column=0, sticky="nsew", padx=14, pady=(0, 14))
+        self.table_frame.grid(row=2, column=0, sticky="nsew", padx=14, pady=(10, 14))
         self.table_frame.grid_rowconfigure(0, weight=1)
         self.table_frame.grid_columnconfigure(0, weight=1)
         self.table_frame.bind("<Configure>", self._on_table_resize)
@@ -638,6 +671,104 @@ class StrategyGUI:
             justify="center",
         )
         placeholder.pack(expand=True, padx=20, pady=20)
+
+    def _toggle_parameters(self) -> None:
+        """Zeigt oder versteckt die editierbaren Parameter."""
+        if self.params_card.winfo_ismapped():
+            self.params_card.grid_remove()
+            self.btn_toggle_parameters.configure(text="Parameter anzeigen")
+        else:
+            self.params_card.grid()
+            self.btn_toggle_parameters.configure(text="Parameter ausblenden")
+
+    def _set_result_view(self, view: str) -> None:
+        """Aktiviert eine Ansicht für KPIs oder einen Plot."""
+        self._current_result_view = view
+        self._refresh_result_view()
+
+    def _refresh_result_view(self) -> None:
+        """Aktualisiert den Ergebnisbereich entsprechend der aktuellen Auswahl."""
+        if self._current_result_view == "kpi":
+            self._display_kpi_table()
+        else:
+            self._display_plot_image(self._current_result_view)
+
+    def _display_kpi_table(self) -> None:
+        """Zeigt die KPI-Tabelle im Ergebnisbereich."""
+        if self._current_kpi_df is None:
+            self._show_placeholder()
+            return
+
+        self._display_table(self._current_kpi_df)
+
+    def _display_plot_image(self, plot_type: str) -> None:
+        """Zeigt ein gespeichertes Plot-PNG im Ergebnisbereich."""
+        for widget in self.table_frame.winfo_children():
+            widget.destroy()
+        self._table_tree = None
+        self._table_columns = []
+
+        slot = {"Szenario A": "A", "Szenario B": "B"}.get(self.result_combo.get())
+        if slot is None:
+            self._show_placeholder()
+            return
+
+        plot_files = {
+            "h2": f"plot_szenario_{slot}_vergleich_h2.png",
+            "netzbezug": f"plot_netzbezug_szenario_{slot}_vergleich.png",
+            "stromkonsum": f"plot_stromkonsum_szenario_{slot}_vergleich.png",
+        }
+        plot_name = plot_files.get(plot_type)
+        if plot_name is None:
+            self._show_placeholder()
+            return
+
+        plot_path = self.results_dir / plot_name
+        if not plot_path.exists():
+            label = ctk.CTkLabel(
+                self.table_frame,
+                text=f"Plot nicht gefunden: {plot_name}",
+                text_color=("#FCA5A5", "#FCA5A5"),
+                font=self.FONT_TEXT,
+                wraplength=720,
+                justify="center",
+            )
+            label.pack(expand=True, padx=20, pady=20)
+            return
+
+        image = self._load_plot_image(plot_path)
+        if image is None:
+            self._show_placeholder()
+            return
+
+        image_label = ctk.CTkLabel(
+            self.table_frame,
+            image=image,
+            text="",
+            fg_color="transparent",
+        )
+        image_label.image = image
+        image_label.grid(row=0, column=0, sticky="nsew", padx=8, pady=8)
+        self.table_frame.grid_rowconfigure(0, weight=1)
+        self.table_frame.grid_columnconfigure(0, weight=1)
+
+    def _load_plot_image(self, plot_path: Path) -> ImageTk.PhotoImage | None:
+        """Lädt ein PNG und skaliert es für den Ergebnisbereich."""
+        try:
+            image = Image.open(plot_path)
+        except Exception:
+            return None
+
+        max_width = 1040
+        max_height = 560
+        scale = min(1.0, max_width / image.width, max_height / image.height)
+        if scale < 1.0:
+            image = image.resize(
+                (max(1, int(image.width * scale)), max(1, int(image.height * scale))),
+                Image.LANCZOS,
+            )
+
+        return ImageTk.PhotoImage(image)
 
     def _set_status(self, text: str, color: str) -> None:
         """Setzt Status in Sidebar und Header konsistent."""
@@ -905,20 +1036,23 @@ class StrategyGUI:
         scenario_map = {"Szenario A": "a", "Szenario B": "b"}
         slot = scenario_map.get(scenario_display)
         if slot is None:
+            self._current_kpi_df = None
             self._show_placeholder()
             return
 
         csv_path = self.results_dir / f"kpis_szenario_{slot}.csv"
 
         if not csv_path.exists():
+            self._current_kpi_df = None
             self._show_placeholder()
             return
 
         try:
-            results_df = pd.read_csv(csv_path)
-            self._display_table(results_df)
+            self._current_kpi_df = pd.read_csv(csv_path)
+            self._refresh_result_view()
         except Exception as exc:  # pylint: disable=broad-except
             print(f"Fehler beim Laden der CSV: {exc}")
+            self._current_kpi_df = None
             self._show_placeholder()
 
     def _display_table(self, df: pd.DataFrame) -> None:
