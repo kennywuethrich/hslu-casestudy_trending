@@ -151,7 +151,7 @@ def load_profiles(config: SystemConfig) -> pd.DataFrame:
 
     # --- File 3: PV-Ertrag ---
     pv_df = pd.read_csv(root / "pv_yield_profile.csv")
-    pv_kw = pv_df["pv_kw"].values
+    pv_kw = pv_df["pv_kw"].values * config.pv_area_factor
 
     n = len(load_el)
     timestamps = pd.date_range(start="2023-01-01", periods=n, freq="h")

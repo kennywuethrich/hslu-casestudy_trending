@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from contextlib import redirect_stderr, redirect_stdout
 import multiprocessing as mp
+import os
 import queue
 import sys
 import traceback
@@ -14,7 +15,11 @@ from typing import Any
 import customtkinter as ctk
 import pandas as pd
 
-from plots import plot_consumption_averages_comparison, plot_h2_soc_comparison
+from plots import (
+    plot_consumption_averages_comparison,
+    plot_h2_soc_comparison,
+    plot_stromkonsum_comparison,
+)
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -74,6 +79,9 @@ def _run_simulations_in_process(
     scenario_2_name: str,
     results_dir_str: str,
     message_queue: Any,
+    h2_capacity_override_kwh: float | None = None,
+    h2_pressure_bar: float | None = None,
+    pv_area_factor: float | None = None,
 ) -> None:
     """Führt beide Simulationen in einem separaten Prozess aus."""
     log_writer = _LogQueueWriter(message_queue, sys.__stdout__, message_kind="log")
@@ -103,6 +111,13 @@ def _run_simulations_in_process(
             ]
 
             for slot_label, scenario in simulations:
+                if h2_capacity_override_kwh is not None:
+                    scenario.config.h2_capacity_override_kwh = h2_capacity_override_kwh
+                if h2_pressure_bar is not None:
+                    scenario.config.h2_pressure_bar = h2_pressure_bar
+                if pv_area_factor is not None:
+                    scenario.config.pv_area_factor = pv_area_factor
+
                 print(f"Starte Berechnung für Szenario {slot_label}...")
                 print(f"  Strompreis: {scenario.config.price_buy_chf:.4f} CHF/kWh")
 
@@ -153,6 +168,17 @@ def _run_simulations_in_process(
                         "Netzbezug-Mittelwerte – " f"Szenario {slot_label} (Vergleich)"
                     ),
                     save_path=str(consumption_save_path),
+                )
+
+                strom_file_name = f"plot_stromkonsum_szenario_{slot_label}_vergleich.png"
+                strom_save_path = results_dir / strom_file_name
+                plot_stromkonsum_comparison(
+                    result_base,
+                    result_optimized,
+                    title=(
+                        "Stromkonsum – " f"Szenario {slot_label} (Vergleich)"
+                    ),
+                    save_path=str(strom_save_path),
                 )
 
             print("Simulationen abgeschlossen.")
@@ -266,7 +292,8 @@ class StrategyGUI:
         left_panel.grid_propagate(False)
         left_panel.grid_rowconfigure(0, weight=0)
         left_panel.grid_rowconfigure(1, weight=0)
-        left_panel.grid_rowconfigure(2, weight=1)
+        left_panel.grid_rowconfigure(2, weight=0)
+        left_panel.grid_rowconfigure(3, weight=1)
         left_panel.grid_columnconfigure(0, weight=1)
 
         setup_title = ctk.CTkLabel(
@@ -354,6 +381,62 @@ class StrategyGUI:
         )
         self.status.grid(row=0, column=1, sticky="e")
 
+        params_card = ctk.CTkFrame(
+            left_panel,
+            corner_radius=12,
+            fg_color=("#111726", "#111726"),
+            border_width=1,
+            border_color=("#2A314A", "#2A314A"),
+        )
+        params_card.grid(row=2, column=0, sticky="ew", padx=12, pady=(0, 12))
+        params_card.grid_columnconfigure(0, weight=1)
+
+        ctk.CTkLabel(
+            params_card,
+            text="Modellparameter",
+            font=self.FONT_SECTION,
+            text_color=("#E5E7EB", "#E5E7EB"),
+        ).grid(row=0, column=0, sticky="w", padx=12, pady=(10, 8))
+
+        ctk.CTkLabel(params_card, text="H2-Kapazität [kWh]", font=self.FONT_TEXT).grid(
+            row=1, column=0, sticky="w", padx=12, pady=(6, 4)
+        )
+        self.h2_capacity_entry = ctk.CTkEntry(
+            params_card,
+            width=320,
+            height=34,
+            corner_radius=10,
+            font=self.FONT_TEXT,
+        )
+        self.h2_capacity_entry.insert(0, str(ScenarioManager.get_by_name(scenarios[0]).config.h2_capacity_kwh))
+        self.h2_capacity_entry.grid(row=2, column=0, sticky="ew", padx=12, pady=(0, 8))
+
+        ctk.CTkLabel(params_card, text="H2-Druck [bar]", font=self.FONT_TEXT).grid(
+            row=3, column=0, sticky="w", padx=12, pady=(6, 4)
+        )
+        self.h2_pressure_entry = ctk.CTkEntry(
+            params_card,
+            width=320,
+            height=34,
+            corner_radius=10,
+            font=self.FONT_TEXT,
+        )
+        self.h2_pressure_entry.insert(0, str(ScenarioManager.get_by_name(scenarios[0]).config.h2_pressure_bar))
+        self.h2_pressure_entry.grid(row=4, column=0, sticky="ew", padx=12, pady=(0, 8))
+
+        ctk.CTkLabel(params_card, text="PV-Fläche Faktor", font=self.FONT_TEXT).grid(
+            row=5, column=0, sticky="w", padx=12, pady=(6, 4)
+        )
+        self.pv_area_entry = ctk.CTkEntry(
+            params_card,
+            width=320,
+            height=34,
+            corner_radius=10,
+            font=self.FONT_TEXT,
+        )
+        self.pv_area_entry.insert(0, str(ScenarioManager.get_by_name(scenarios[0]).config.pv_area_factor))
+        self.pv_area_entry.grid(row=6, column=0, sticky="ew", padx=12, pady=(0, 12))
+
         desc_card = ctk.CTkFrame(
             left_panel,
             corner_radius=12,
@@ -361,7 +444,7 @@ class StrategyGUI:
             border_width=1,
             border_color=("#2A314A", "#2A314A"),
         )
-        desc_card.grid(row=2, column=0, sticky="nsew", padx=12, pady=(0, 12))
+        desc_card.grid(row=3, column=0, sticky="nsew", padx=12, pady=(0, 12))
         desc_card.grid_rowconfigure(1, weight=1)
         desc_card.grid_columnconfigure(0, weight=1)
 
@@ -453,6 +536,48 @@ class StrategyGUI:
         )
         self.result_combo.set("Szenario A")
         self.result_combo.pack(side="left")
+
+        plot_button_frame = ctk.CTkFrame(results_header, fg_color="transparent")
+        plot_button_frame.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(10, 0))
+        plot_button_frame.grid_columnconfigure(0, weight=1)
+        plot_button_frame.grid_columnconfigure(1, weight=1)
+        plot_button_frame.grid_columnconfigure(2, weight=1)
+
+        self.btn_plot_h2 = ctk.CTkButton(
+            plot_button_frame,
+            text="H2",
+            command=lambda: self._open_plot("h2"),
+            font=self.FONT_BUTTON,
+            height=38,
+            corner_radius=12,
+            fg_color=("#2563EB", "#2563EB"),
+            hover_color=("#1D4ED8", "#1D4ED8"),
+        )
+        self.btn_plot_h2.grid(row=0, column=0, sticky="ew", padx=4)
+
+        self.btn_plot_netz = ctk.CTkButton(
+            plot_button_frame,
+            text="Netzbezug",
+            command=lambda: self._open_plot("netzbezug"),
+            font=self.FONT_BUTTON,
+            height=38,
+            corner_radius=12,
+            fg_color=("#10B981", "#10B981"),
+            hover_color=("#059669", "#059669"),
+        )
+        self.btn_plot_netz.grid(row=0, column=1, sticky="ew", padx=4)
+
+        self.btn_plot_strom = ctk.CTkButton(
+            plot_button_frame,
+            text="Stromkonsum",
+            command=lambda: self._open_plot("stromkonsum"),
+            font=self.FONT_BUTTON,
+            height=38,
+            corner_radius=12,
+            fg_color=("#F59E0B", "#F59E0B"),
+            hover_color=("#D97706", "#D97706"),
+        )
+        self.btn_plot_strom.grid(row=0, column=2, sticky="ew", padx=4)
 
         log_frame = ctk.CTkFrame(
             results_panel,
@@ -656,9 +781,61 @@ class StrategyGUI:
         self._clear_log()
         self._append_log("Simulation gestartet...")
         self._show_placeholder()
-        self._start_simulation_process()
 
-    def _start_simulation_process(self) -> None:
+        h2_capacity = self._parse_float(
+            self.h2_capacity_entry.get(), "H2-Kapazität", min_value=0.0
+        )
+        if h2_capacity is None:
+            self.btn.configure(state="normal")
+            return
+
+        h2_pressure = self._parse_float(
+            self.h2_pressure_entry.get(), "H2-Druck", min_value=0.0
+        )
+        if h2_pressure is None:
+            self.btn.configure(state="normal")
+            return
+
+        pv_area_factor = self._parse_float(
+            self.pv_area_entry.get(), "PV-Fläche Faktor", min_value=0.0
+        )
+        if pv_area_factor is None:
+            self.btn.configure(state="normal")
+            return
+
+        self._start_simulation_process(
+            h2_capacity,
+            h2_pressure,
+            pv_area_factor,
+        )
+
+    def _parse_float(
+        self,
+        value: str,
+        field_name: str,
+        min_value: float = 0.0,
+    ) -> float | None:
+        """Parst einen numerischen Wert aus einem Eingabefeld."""
+        try:
+            parsed = float(value.strip())
+        except ValueError:
+            self._append_log(f"Ungültiger Wert für {field_name}: {value}")
+            return None
+
+        if parsed <= min_value:
+            self._append_log(
+                f"{field_name} muss größer als {min_value} sein: {parsed}"
+            )
+            return None
+
+        return parsed
+
+    def _start_simulation_process(
+        self,
+        h2_capacity_override_kwh: float,
+        h2_pressure_bar: float,
+        pv_area_factor: float,
+    ) -> None:
         """Startet den Simulationslauf in einem separaten Prozess."""
         scenario_1_name = self.s1_combo.get()
         scenario_2_name = self.s2_combo.get()
@@ -672,18 +849,50 @@ class StrategyGUI:
                 scenario_2_name,
                 str(self.results_dir),
                 self._sim_process_queue,
+                h2_capacity_override_kwh,
+                h2_pressure_bar,
+                pv_area_factor,
             ),
             daemon=True,
         )
         self._sim_process.start()
         self.root.after(100, self._poll_process_events)
 
+    def _open_plot(self, plot_type: str) -> None:
+        """Öffnet den gewünschten Plot als PNG-Datei."""
+        scenario_map = {"Szenario A": "A", "Szenario B": "B"}
+        slot = scenario_map.get(self.result_combo.get())
+        if slot is None:
+            self._append_log("Ungültiges Szenario ausgewählt.")
+            return
+
+        plot_files = {
+            "h2": f"plot_szenario_{slot}_vergleich_h2.png",
+            "netzbezug": f"plot_netzbezug_szenario_{slot}_vergleich.png",
+            "stromkonsum": f"plot_stromkonsum_szenario_{slot}_vergleich.png",
+        }
+        plot_name = plot_files.get(plot_type)
+        if plot_name is None:
+            self._append_log(f"Unbekannter Plottyp: {plot_type}")
+            return
+
+        plot_path = self.results_dir / plot_name
+        if not plot_path.exists():
+            self._append_log(f"Plot nicht gefunden: {plot_name}")
+            return
+
+        try:
+            os.startfile(plot_path)
+            self._append_log(f"Öffne Plot: {plot_name}")
+        except Exception as exc:
+            self._append_log(f"Plot konnte nicht geöffnet werden: {exc}")
+
     def _on_simulations_complete(self) -> None:
         """Speichert Plots und zeigt die KPI-Tabelle nach Simulationsende."""
         self._set_status("Fertig", "#22C55E")
         self.btn.configure(state="normal")
 
-        self._load_result_csv("Szenario A")
+        self._load_result_csv(self.result_combo.get())
         self._append_log("KPI-Tabelle geladen.")
         self._cleanup_sim_process()
 

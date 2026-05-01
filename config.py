@@ -23,14 +23,10 @@ class SystemConfig:
     h2_tank_volume_m3: float = 85.0  # Tankvolumen [m³]
     h2_pressure_bar: float = 35.0  # Betriebsdruck [bar] (3.5–35 bar)
     h2_temperature_c: float = 15.0  # Tanktemperatur [°C]
-    h2_density_override_kg_m3: Optional[float] = 2.94  # Dichte bei 35 bar, 15°C [kg/m³]
-    h2_total_mass_override_kg: Optional[float] = (
-        250.0  # Gesamtmasse bei 35 bar, 15°C [kg]
-    )
+    h2_density_override_kg_m3: Optional[float] = None  # Dichte bei 35 bar, 15°C [kg/m³] (None = ideales Gas)
+    h2_total_mass_override_kg: Optional[float] = None  # Gesamtmasse bei 35 bar, 15°C [kg]
     h2_lhv_kwh_per_kg: float = 33.33  # Unterer Heizwert H₂ [kWh/kg]
-    h2_capacity_override_kwh: Optional[float] = (
-        8325.5  # Energieinhalt (Factsheet H2) [kWh]
-    )
+    h2_capacity_override_kwh: Optional[float] = None  # Energieinhalt (Factsheet H2) [kWh]
     h2_initial_soc: float = 0.05  # Anfangsfüllstand [0–1]
     h2_min_soc: float = 0.085  # Minimaler Füllstand [0–1]
 
@@ -54,6 +50,7 @@ class SystemConfig:
     C_th_kwh_per_K: float = 50.0  # Thermische Kapazität Gebäude [kWh/K]
     UA_kwh_per_K: float = 2.5  # Wärmedurchgangskoeffizient × Fläche [kWh/(K·h)]
     solar_gain_factor: float = 0.05  # Solare Gewinne als Anteil der PV-Leistung [-]
+    pv_area_factor: float = 1.0  # Skaliert PV-Ertrag für Panelfläche und Wirkungsgrad
 
     # --- Betriebsregeln und Preise ---------------------------------------
     price_buy_chf: float = (
@@ -100,6 +97,7 @@ class SystemConfig:
         assert self.ev_fleet_size >= 1, "ev_fleet_size muss >= 1 sein"
         if self.grid_import_limit_kw is not None:
             assert self.grid_import_limit_kw >= 0, "grid_import_limit_kw muss >= 0 sein"
+        assert self.pv_area_factor > 0.0, "pv_area_factor muss > 0 sein"
 
     # --- H₂-Speicher: abgeleitete Eigenschaften --------------------------
 

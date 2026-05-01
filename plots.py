@@ -300,3 +300,46 @@ def plot_consumption_averages_comparison(
         plt.close(fig)
     else:
         plt.show()
+
+
+def plot_stromkonsum_comparison(
+    df_base: pd.DataFrame,
+    df_optimized: pd.DataFrame,
+    title: str = "Stromkonsum Vergleich",
+    save_path: str = None,
+) -> None:
+    """Plottet den durchschnittlichen Netzbezug für Base und Optimized in einem Chart."""
+    base_grid_import = _build_grid_import_series(df_base)
+    opt_grid_import = _build_grid_import_series(df_optimized)
+
+    base_avg_by_hour = base_grid_import.groupby(base_grid_import.index % 24).mean()
+    opt_avg_by_hour = opt_grid_import.groupby(opt_grid_import.index % 24).mean()
+
+    fig, ax = plt.subplots(figsize=(12, 5))
+    ax.plot(
+        base_avg_by_hour.index,
+        base_avg_by_hour.values,
+        color="tab:blue",
+        linewidth=2,
+        label="BaseStrategy",
+    )
+    ax.plot(
+        opt_avg_by_hour.index,
+        opt_avg_by_hour.values,
+        color="tab:orange",
+        linewidth=2,
+        label="OptimizedStrategy",
+    )
+    ax.set_title(title)
+    ax.set_xlabel("Stunde des Tages")
+    ax.set_ylabel("Netzbezug [kW]")
+    ax.set_xticks(range(0, 24, 2))
+    ax.grid(True, linestyle=":", alpha=0.5)
+    ax.legend(loc="best")
+
+    fig.tight_layout()
+    if save_path:
+        plt.savefig(save_path)
+        plt.close(fig)
+    else:
+        plt.show()
