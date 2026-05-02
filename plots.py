@@ -2,6 +2,9 @@ import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import pandas as pd
 
+def _get_weekday_indices(df: pd.DataFrame) -> pd.Series:
+    """Extrahiert Wochentag-Indizes aus timestamp (0=Mo, 6=So)."""
+    return pd.to_datetime(df["timestamp"]).dt.dayofweek
 
 def plot_h2_soc(
     df: pd.DataFrame,
@@ -147,7 +150,7 @@ def plot_consumption_averages(
     avg_by_hour = grid_import_kw.groupby(grid_import_kw.index % 24).mean()
 
     weekday_order = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
-    avg_by_weekday = grid_import_kw.groupby((grid_import_kw.index // 24) % 7).mean()
+    avg_by_weekday = grid_import_kw.groupby(_get_weekday_indices(df)).mean()
     avg_by_weekday.index = [weekday_order[int(i)] for i in avg_by_weekday.index]
 
     avg_by_week = grid_import_kw.groupby(grid_import_kw.index // 168).mean()
@@ -211,15 +214,10 @@ def plot_consumption_averages_comparison(
     opt_avg_by_hour = opt_grid_import.groupby(opt_grid_import.index % 24).mean()
 
     weekday_order = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
-    base_avg_by_weekday = base_grid_import.groupby(
-        (base_grid_import.index // 24) % 7
-    ).mean()
-    opt_avg_by_weekday = opt_grid_import.groupby(
-        (opt_grid_import.index // 24) % 7
-    ).mean()
-    base_avg_by_weekday.index = [
-        weekday_order[int(i)] for i in base_avg_by_weekday.index
-    ]
+    base_avg_by_weekday = base_grid_import.groupby(_get_weekday_indices(df_base)).mean()
+    opt_avg_by_weekday = opt_grid_import.groupby(_get_weekday_indices(df_optimized)).mean()
+    
+    base_avg_by_weekday.index = [weekday_order[int(i)] for i in base_avg_by_weekday.index]
     opt_avg_by_weekday.index = [weekday_order[int(i)] for i in opt_avg_by_weekday.index]
 
     base_avg_by_week = base_grid_import.groupby(base_grid_import.index // 168).mean()

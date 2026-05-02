@@ -154,7 +154,7 @@ def load_profiles(config: SystemConfig) -> pd.DataFrame:
     pv_kw = pv_df["pv_kw"].values * config.pv_area_factor
 
     n = len(load_el)
-    timestamps = pd.date_range(start="2023-01-01", periods=n, freq="h")
+    timestamps = pd.date_range(start="2021-01-01", periods=n, freq="h")
 
     # --- EV-Profil (erweiterbar, siehe _build_ev_profile oben) ---
     ev_demand = _build_ev_profile(n, config).values
