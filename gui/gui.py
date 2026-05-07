@@ -225,6 +225,8 @@ class StrategyGUI:
         self._image_refs: dict[str, Any] = {}
         self._sim_process: mp.Process | None = None
         self._sim_process_queue: Any | None = None
+        self.results_dir.mkdir(parents=True, exist_ok=True)
+        self._cleanup_existing_plots()
         self._configure_ttk_style()
 
         shell = ctk.CTkFrame(root, corner_radius=18, fg_color=("#121728", "#121728"))
@@ -876,6 +878,14 @@ class StrategyGUI:
             "Modern.Treeview.Heading",
             background=[("active", "#334155")],
         )
+
+    def _cleanup_existing_plots(self) -> None:
+        """Löscht vorhandene Plot-PNGs beim Start der GUI."""
+        for plot_path in self.results_dir.glob("plot_*.png"):
+            try:
+                plot_path.unlink(missing_ok=True)
+            except OSError:
+                pass
 
     def _update_desc(
         self,
