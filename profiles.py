@@ -142,7 +142,25 @@ def load_profiles(config: SystemConfig) -> pd.DataFrame:
     load_el = el_df["total_electrcitiy_consumption_kWh"].values
 
     # --- File 2: Wärmelast + Außentemperatur ---
-    heat_df = pd.read_csv(root / "heat_demand_profile.csv")
+    heat_df = pd.read_csv(
+        root / "heat_demand_profile.csv",
+        sep=";",
+        encoding="cp1252",
+    )
+
+    def _to_numeric(series: pd.Series) -> pd.Series:
+        return pd.to_numeric(
+            series.astype(str).str.replace(r"[^\d\.\-]+", "", regex=True),
+            errors="coerce",
+        )
+
+    heat_df["Demand space heating kWh"] = _to_numeric(
+        heat_df["Demand space heating kWh"]
+    )
+    heat_df["Demand domestic hot water kWh"] = _to_numeric(
+        heat_df["Demand domestic hot water kWh"]
+    )
+
     load_heat = (
         heat_df["Demand space heating kWh"] + heat_df["Demand domestic hot water kWh"]
     ).values
