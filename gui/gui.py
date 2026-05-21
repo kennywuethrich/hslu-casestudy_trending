@@ -171,14 +171,14 @@ def _run_simulations_in_process(
                     save_path=str(consumption_save_path),
                 )
 
-                strom_file_name = f"plot_stromkonsum_szenario_{slot_label}_vergleich.png"
+                strom_file_name = (
+                    f"plot_stromkonsum_szenario_{slot_label}_vergleich.png"
+                )
                 strom_save_path = results_dir / strom_file_name
                 plot_stromkonsum_comparison(
                     result_base,
                     result_optimized,
-                    title=(
-                        "Stromkonsum – " f"Szenario {slot_label} (Vergleich)"
-                    ),
+                    title=("Stromkonsum – " f"Szenario {slot_label} (Vergleich)"),
                     save_path=str(strom_save_path),
                 )
 
@@ -399,7 +399,9 @@ class StrategyGUI:
             fg_color=("#2563EB", "#2563EB"),
             hover_color=("#1D4ED8", "#1D4ED8"),
         )
-        self.btn_toggle_parameters.grid(row=3, column=0, sticky="ew", padx=12, pady=(0, 8))
+        self.btn_toggle_parameters.grid(
+            row=3, column=0, sticky="ew", padx=12, pady=(0, 8)
+        )
 
         self.params_card = ctk.CTkFrame(
             left_panel,
@@ -418,9 +420,9 @@ class StrategyGUI:
             text_color=("#E5E7EB", "#E5E7EB"),
         ).grid(row=0, column=0, sticky="w", padx=12, pady=(10, 8))
 
-        ctk.CTkLabel(self.params_card, text="H2-Kapazität [kWh]", font=self.FONT_TEXT).grid(
-            row=1, column=0, sticky="w", padx=12, pady=(6, 4)
-        )
+        ctk.CTkLabel(
+            self.params_card, text="H2-Kapazität [kWh]", font=self.FONT_TEXT
+        ).grid(row=1, column=0, sticky="w", padx=12, pady=(6, 4))
         self.h2_capacity_entry = ctk.CTkEntry(
             self.params_card,
             width=320,
@@ -428,7 +430,9 @@ class StrategyGUI:
             corner_radius=10,
             font=self.FONT_TEXT,
         )
-        self.h2_capacity_entry.insert(0, str(ScenarioManager.get_by_name(scenarios[0]).config.h2_capacity_kwh))
+        self.h2_capacity_entry.insert(
+            0, str(ScenarioManager.get_by_name(scenarios[0]).config.h2_capacity_kwh)
+        )
         self.h2_capacity_entry.grid(row=2, column=0, sticky="ew", padx=12, pady=(0, 8))
 
         ctk.CTkLabel(self.params_card, text="H2-Druck [bar]", font=self.FONT_TEXT).grid(
@@ -441,12 +445,14 @@ class StrategyGUI:
             corner_radius=10,
             font=self.FONT_TEXT,
         )
-        self.h2_pressure_entry.insert(0, str(ScenarioManager.get_by_name(scenarios[0]).config.h2_pressure_bar))
+        self.h2_pressure_entry.insert(
+            0, str(ScenarioManager.get_by_name(scenarios[0]).config.h2_pressure_bar)
+        )
         self.h2_pressure_entry.grid(row=4, column=0, sticky="ew", padx=12, pady=(0, 8))
 
-        ctk.CTkLabel(self.params_card, text="PV-Fläche Faktor", font=self.FONT_TEXT).grid(
-            row=5, column=0, sticky="w", padx=12, pady=(6, 4)
-        )
+        ctk.CTkLabel(
+            self.params_card, text="PV-Fläche Faktor", font=self.FONT_TEXT
+        ).grid(row=5, column=0, sticky="w", padx=12, pady=(6, 4))
         self.pv_area_entry = ctk.CTkEntry(
             self.params_card,
             width=320,
@@ -454,7 +460,9 @@ class StrategyGUI:
             corner_radius=10,
             font=self.FONT_TEXT,
         )
-        self.pv_area_entry.insert(0, str(ScenarioManager.get_by_name(scenarios[0]).config.pv_area_factor))
+        self.pv_area_entry.insert(
+            0, str(ScenarioManager.get_by_name(scenarios[0]).config.pv_area_factor)
+        )
         self.pv_area_entry.grid(row=6, column=0, sticky="ew", padx=12, pady=(0, 12))
 
         self.params_card.grid_remove()
@@ -778,7 +786,10 @@ class StrategyGUI:
             scale = 1.0
 
         if scale != 1.0:
-            new_size = (max(1, int(image.width * scale)), max(1, int(image.height * scale)))
+            new_size = (
+                max(1, int(image.width * scale)),
+                max(1, int(image.height * scale)),
+            )
             image = image.resize(new_size, Image.LANCZOS)
 
         return ImageTk.PhotoImage(image)
@@ -975,9 +986,7 @@ class StrategyGUI:
             return None
 
         if parsed <= min_value:
-            self._append_log(
-                f"{field_name} muss größer als {min_value} sein: {parsed}"
-            )
+            self._append_log(f"{field_name} muss größer als {min_value} sein: {parsed}")
             return None
 
         return parsed
