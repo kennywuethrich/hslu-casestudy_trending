@@ -31,7 +31,7 @@ def _build_scenarios() -> List[Scenario]:
     default_config = SystemConfig()
     return [
         Scenario(
-            name="Szenario A",
+            name="Szenario 1",
             config=default_config,
             description=(
                 "Baseline-Szenario mit aktuellen Strompreisen.\n\n"
@@ -41,7 +41,7 @@ def _build_scenarios() -> List[Scenario]:
             ),
         ),
         Scenario(
-            name="Szenario B",
+            name="Szenario 2",
             config=SystemConfig(price_buy_chf=0.15, price_sell_chf=0.08),
             description=(
                 "Szenario mit günstigen Strompreisen.\n\n"
@@ -51,7 +51,7 @@ def _build_scenarios() -> List[Scenario]:
             ),
         ),
         Scenario(
-            name="Szenario C",
+            name="Szenario 3",
             config=SystemConfig(
                 scenario_id="commuter_peak",
                 ev_profile_mode="commuter_peak",
@@ -69,7 +69,7 @@ def _build_scenarios() -> List[Scenario]:
             ),
         ),
         Scenario(
-            name="Szenario D",
+            name="Szenario 4",
             config=SystemConfig(
                 scenario_id="grid_limit",
                 grid_import_limit_kw=45.0,
@@ -82,7 +82,7 @@ def _build_scenarios() -> List[Scenario]:
             ),
         ),
         Scenario(
-            name="Szenario E",
+            name="Szenario 5",
             config=SystemConfig(
                 scenario_id="cold_week_travel_weekend",
                 ev_profile_mode="travel_weekend",
