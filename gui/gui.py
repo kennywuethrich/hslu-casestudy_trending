@@ -761,14 +761,25 @@ class StrategyGUI:
         except Exception:
             return None
 
-        max_width = 1040
-        max_height = 560
-        scale = min(1.0, max_width / image.width, max_height / image.height)
-        if scale < 1.0:
-            image = image.resize(
-                (max(1, int(image.width * scale)), max(1, int(image.height * scale))),
-                Image.LANCZOS,
-            )
+        # Sicherstellen, dass die Widget-Geometrie aktuell ist
+        try:
+            self.table_frame.update_idletasks()
+        except Exception:
+            pass
+
+        # Verfügbaren Platz (mit kleinem Padding) berechnen
+        padding = 24
+        max_width = max(100, self.table_frame.winfo_width() - padding)
+        max_height = max(100, self.table_frame.winfo_height() - padding)
+
+        # Proportionale Skalierung, damit das Bild den Bereich bestmöglich ausfüllt
+        scale = min(max_width / image.width, max_height / image.height)
+        if scale <= 0:
+            scale = 1.0
+
+        if scale != 1.0:
+            new_size = (max(1, int(image.width * scale)), max(1, int(image.height * scale)))
+            image = image.resize(new_size, Image.LANCZOS)
 
         return ImageTk.PhotoImage(image)
 
