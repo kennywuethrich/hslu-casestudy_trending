@@ -32,9 +32,11 @@ def plot_h2_soc(
             x, df["h2_soc_pct"], label="H2 Füllstand [%]", color="tab:blue", linewidth=2
         )
         ax.set_xlabel("Monat")
-        ax.xaxis.set_major_locator(mdates.MonthLocator())
-        ax.xaxis.set_major_formatter(mdates.DateFormatter("%b"))
-        fig.autofmt_xdate(rotation=45)
+        months = pd.date_range(start=x.min().replace(day=1), end=x.max(), freq="MS")
+        ax.set_xticks(months)
+        ax.set_xticklabels([dt.strftime("%b") for dt in months], rotation=45)
+        if len(months) > 1:
+            ax.set_xlim(months.min(), months.max())
     else:
         ax.plot(
             df["h2_soc_pct"], label="H2 Füllstand [%]", color="tab:blue", linewidth=2
@@ -88,19 +90,47 @@ def plot_h2_soc_comparison(
         raise ValueError("df_optimized muss die Spalte 'h2_soc_pct' enthalten!")
 
     fig, ax = plt.subplots(figsize=(12, 5))
-    ax.plot(
-        df_base["h2_soc_pct"],
-        label="BaseStrategy",
-        color="tab:blue",
-        linewidth=2,
-    )
-    ax.plot(
-        df_optimized["h2_soc_pct"],
-        label="OptimizedStrategy",
-        color="tab:orange",
-        linewidth=2,
-    )
-    ax.set_xlabel("Zeitschritt [h]")
+    if "timestamp" in df_base.columns and "timestamp" in df_optimized.columns:
+        x_base = pd.to_datetime(df_base["timestamp"])
+        x_optimized = pd.to_datetime(df_optimized["timestamp"])
+        ax.plot(
+            x_base,
+            df_base["h2_soc_pct"],
+            label="BaseStrategy",
+            color="tab:blue",
+            linewidth=2,
+        )
+        ax.plot(
+            x_optimized,
+            df_optimized["h2_soc_pct"],
+            label="OptimizedStrategy",
+            color="tab:orange",
+            linewidth=2,
+        )
+        ax.set_xlabel("Monat")
+        months = pd.date_range(
+            start=min(x_base.min(), x_optimized.min()).replace(day=1),
+            end=max(x_base.max(), x_optimized.max()),
+            freq="MS",
+        )
+        ax.set_xticks(months)
+        ax.set_xticklabels([dt.strftime("%b") for dt in months], rotation=45)
+        if len(months) > 1:
+            ax.set_xlim(months.min(), months.max())
+    else:
+        ax.plot(
+            df_base["h2_soc_pct"],
+            label="BaseStrategy",
+            color="tab:blue",
+            linewidth=2,
+        )
+        ax.plot(
+            df_optimized["h2_soc_pct"],
+            label="OptimizedStrategy",
+            color="tab:orange",
+            linewidth=2,
+        )
+        ax.set_xlabel("Zeitschritt [h]")
     ax.set_ylabel("H2 Füllstand [%]")
     ax.set_ylim([0, 100])
     ax.grid(True, which="both", linestyle=":", alpha=0.5)
